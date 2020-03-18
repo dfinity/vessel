@@ -17,7 +17,10 @@ struct Opts {
 
 #[derive(Debug, StructOpt)]
 enum Command {
-    Install,
+    Install {
+        #[structopt(long)]
+        list_packages: bool,
+    },
     Build {
         #[structopt(parse(from_os_str))]
         entry_point: PathBuf,
@@ -27,8 +30,13 @@ enum Command {
 fn main() {
     let opts = Opts::from_args();
     match opts.command {
-        Command::Install => {
-            vessel::install_packages(&opts.package_set, &opts.manifest);
+        Command::Install { list_packages } => {
+            let packages = vessel::install_packages(&opts.package_set, &opts.manifest);
+            if list_packages {
+                for (name, path) in packages {
+                    println!("--package {} {}", name, path.display().to_string())
+                }
+            }
         }
         Command::Build { entry_point } => {
             let packages = vessel::install_packages(&opts.package_set, &opts.manifest);
@@ -43,14 +51,11 @@ fn main() {
                 package_flags.push(path.display().to_string());
             }
 
-            let mut moc_command =
-                process::Command::new("moc");
+            let mut moc_command = process::Command::new("moc");
             let moc_command = moc_command.args(&package_flags);
 
             println!("About to run: {:?}", moc_command);
-            moc_command
-                .spawn()
-                .expect("Failed to start moc");
+            moc_command.spawn().expect("Failed to start moc");
         }
     }
 }

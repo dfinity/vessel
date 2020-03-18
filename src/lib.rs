@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tar::Archive;
 use tempfile::TempDir;
+use std::process::Command;
 
 pub fn install_packages(package_set: &PathBuf, manifest: &PathBuf) -> Vec<(String, PathBuf)> {
     let package_set: PackageSet =
@@ -146,5 +147,26 @@ fn download_tar_ball(
     }
     fs::rename(repo_dir.path(), dest)?;
 
+    Ok(())
+}
+
+fn clone_package(
+    dest: &Path,
+    repo: &str,
+    version: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let tmp_dir: TempDir = tempfile::tempdir()?;
+    Command::new("git")
+        .args(&["clone", repo, "repo"])
+        .current_dir(tmp_dir.path())
+        .output()
+        .expect(&format!("Failed to clone the repo at {}", repo));
+    let repo_dir = tmp_dir.path().join("repo");
+    Command::new("git")
+        .args(&["-c", "advice.detachedHead=false", "checkout", version])
+        .current_dir(&repo_dir)
+        .output()
+        .expect(&format!("Failed to checkout version {} for the repository {}", repo, version));
+    fs::rename(repo_dir, dest)?;
     Ok(())
 }
