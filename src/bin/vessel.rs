@@ -1,6 +1,7 @@
 use vessel;
 
 use std::path::PathBuf;
+use std::process;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -30,9 +31,26 @@ fn main() {
             vessel::install_packages(&opts.package_set, &opts.manifest);
         }
         Command::Build { entry_point } => {
-            let package_flags = vessel::install_packages(&opts.package_set, &opts.manifest);
+            let packages = vessel::install_packages(&opts.package_set, &opts.manifest);
 
-            println!("Running: moc {} {}", package_flags, entry_point.display())
+            let mut package_flags = vec![
+                "-wasi-system-api".to_string(),
+                entry_point.display().to_string(),
+            ];
+            for (name, path) in packages {
+                package_flags.push("--package".to_string());
+                package_flags.push(name);
+                package_flags.push(path.display().to_string());
+            }
+
+            let mut moc_command =
+                process::Command::new("moc");
+            let moc_command = moc_command.args(&package_flags);
+
+            println!("About to run: {:?}", moc_command);
+            moc_command
+                .spawn()
+                .expect("Failed to start moc");
         }
     }
 }

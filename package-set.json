@@ -2,13 +2,13 @@
     {
         "name": "list",
         "repo": "https://github.com/kritzcreek/mo-list",
-        "version": "v1.0.1",
+        "version": "v2.0.0",
         "dependencies": ["option"]
     },
     {
         "name": "option",
         "repo": "https://github.com/kritzcreek/mo-option",
-        "version": "v1.0.0",
+        "version": "v2.0.0",
         "dependencies": []
     }
 ]

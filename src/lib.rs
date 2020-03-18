@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use tar::Archive;
 use tempfile::TempDir;
 
-pub fn install_packages(package_set: &PathBuf, manifest: &PathBuf) -> String {
+pub fn install_packages(package_set: &PathBuf, manifest: &PathBuf) -> Vec<(String, PathBuf)> {
     let package_set: PackageSet =
         serde_json::from_reader(fs::File::open(package_set).unwrap()).unwrap();
     let manifest: Manifest = serde_json::from_reader(fs::File::open(manifest).unwrap()).unwrap();
@@ -31,13 +31,12 @@ pub fn install_packages(package_set: &PathBuf, manifest: &PathBuf) -> String {
     install_plan
         .iter()
         .map(|p| {
-            format!(
-                "--package {} .packages/{}/{}/src",
-                p.name, p.name, p.version
+            (
+                p.name.clone(),
+                PathBuf::from(&format!(".packages/{}/{}/src", p.name, p.version)),
             )
         })
-        .collect::<Vec<_>>()
-        .join(" ")
+        .collect()
 }
 
 fn download_package(package: &Package) -> Result<(), Box<dyn std::error::Error>> {
