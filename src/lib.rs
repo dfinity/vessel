@@ -10,8 +10,8 @@ use tempfile::TempDir;
 
 pub fn main() {
     let package_set: PackageSet =
-        serde_json::from_reader(fs::File::open("packages.json").unwrap()).unwrap();
-    let install_plan = package_set.transitive_deps(vec!["pscid".to_string()]);
+        serde_json::from_reader(fs::File::open("package-set.json").unwrap()).unwrap();
+    let install_plan = package_set.transitive_deps(vec!["list".to_string()]);
 
     println!(
         "Install plan: {}",
