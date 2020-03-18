@@ -8,14 +8,19 @@ use std::path::{Path, PathBuf};
 use tar::Archive;
 use tempfile::TempDir;
 
-pub fn main() {
+pub fn install_packages(package_set: &PathBuf, manifest: &PathBuf) -> String {
     let package_set: PackageSet =
-        serde_json::from_reader(fs::File::open("package-set.json").unwrap()).unwrap();
-    let install_plan = package_set.transitive_deps(vec!["list".to_string()]);
+        serde_json::from_reader(fs::File::open(package_set).unwrap()).unwrap();
+    let manifest: Manifest = serde_json::from_reader(fs::File::open(manifest).unwrap()).unwrap();
+    let install_plan = package_set.transitive_deps(manifest.dependencies);
 
     println!(
         "Install plan: {}",
-        install_plan.iter().map(|p| p.name.as_ref()).collect::<Vec<_>>().join(", ")
+        install_plan
+            .iter()
+            .map(|p| p.name.as_ref())
+            .collect::<Vec<_>>()
+            .join(", ")
     );
 
     for package in &install_plan {
@@ -23,12 +28,16 @@ pub fn main() {
     }
     println!("Finished installing.");
 
-    let package_flags = install_plan
+    install_plan
         .iter()
-        .map(|p| format!("--package {} .packages/{}/{}/src", p.name, p.name, p.version))
+        .map(|p| {
+            format!(
+                "--package {} .packages/{}/{}/src",
+                p.name, p.name, p.version
+            )
+        })
         .collect::<Vec<_>>()
-        .join(" ");
-    println!("moc package flags:\n{}", package_flags);
+        .join(" ")
 }
 
 fn download_package(package: &Package) -> Result<(), Box<dyn std::error::Error>> {
@@ -83,6 +92,11 @@ struct Package {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct PackageSet(Vec<Package>);
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+struct Manifest {
+    dependencies: Vec<Name>,
+}
 
 impl PackageSet {
     fn find(&self, name: &Name) -> &Package {
