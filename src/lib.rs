@@ -39,6 +39,7 @@ fn download_package(package: &Package) -> Result<(), Box<dyn std::error::Error>>
     }
     let repo_dir = package_dir.join(&package.version);
     if !repo_dir.exists() {
+        println!("Downloading package: {}", package.name);
         download_tar_ball(&repo_dir, &package.repo, &package.version)?
     }
     Ok(())
