@@ -25,7 +25,7 @@ pub fn main() {
 
     let package_flags = install_plan
         .iter()
-        .map(|p| format!("--package {} .packages/{}/{}", p.name, p.name, p.version))
+        .map(|p| format!("--package {} .packages/{}/{}/src", p.name, p.name, p.version))
         .collect::<Vec<_>>()
         .join(" ");
     println!("moc package flags:\n{}", package_flags);
