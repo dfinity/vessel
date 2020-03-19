@@ -31,10 +31,9 @@ impl Vessel {
             ))
             .context("Failed to parse the package set file")?;
         let package_set: PackageSet = serde_json::from_reader(package_set_file)?;
-        let manifest_file = File::open(manifest_file).context(format!(
-            "Failed to open the package set file at {}",
-            manifest_file.display()
-        ))?;
+        let manifest_file = File::open(manifest_file).context(
+            "Failed to open the vessel.json file"
+        )?;
         let manifest: Manifest = serde_json::from_reader(manifest_file)
             .context("Failed to parse the vessel.json file")?;
         Ok(Vessel {
