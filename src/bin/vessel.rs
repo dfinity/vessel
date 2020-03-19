@@ -1,5 +1,6 @@
 use vessel;
 
+use anyhow::Result;
 use pretty_env_logger;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -27,24 +28,24 @@ enum Command {
     },
 }
 
-fn main() {
+fn main() -> Result<()> {
     pretty_env_logger::init();
     let opts = Opts::from_args();
     match opts.command {
         Command::Install { list_packages } => {
-            let vessel =
-                vessel::Vessel::new(!list_packages, &opts.package_set, &opts.manifest).unwrap();
-            let packages = vessel.install_packages().unwrap();
+            let vessel = vessel::Vessel::new(!list_packages, &opts.package_set, &opts.manifest)?;
+            let packages = vessel.install_packages()?;
             if list_packages {
                 for (name, path) in packages {
                     println!("--package {} {}", name, path.display().to_string())
                 }
             }
+            Ok(())
         }
         Command::Build { entry_point } => {
-            let vessel = vessel::Vessel::new(true, &opts.package_set, &opts.manifest).unwrap();
-            let packages = vessel.install_packages().unwrap();
-            vessel.build_module(entry_point, packages).unwrap();
+            let vessel = vessel::Vessel::new(true, &opts.package_set, &opts.manifest)?;
+            let packages = vessel.install_packages()?;
+            vessel.build_module(entry_point, packages)
         }
     }
 }

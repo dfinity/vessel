@@ -1,11 +1,11 @@
+use anyhow::{self, Context, Result};
 use colored::*;
 use flate2::read::GzDecoder;
 use log::debug;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::fmt;
-use std::fs;
+use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -23,9 +23,20 @@ impl Vessel {
         output_for_humans: bool,
         package_set_file: &PathBuf,
         manifest_file: &PathBuf,
-    ) -> Result<Vessel, Box<dyn std::error::Error>> {
-        let package_set: PackageSet = serde_json::from_reader(fs::File::open(package_set_file)?)?;
-        let manifest: Manifest = serde_json::from_reader(fs::File::open(manifest_file)?)?;
+    ) -> Result<Vessel> {
+        let package_set_file = File::open(package_set_file)
+            .context(format!(
+                "Failed to open the package set file at {}",
+                package_set_file.display()
+            ))
+            .context("Failed to parse the package set file")?;
+        let package_set: PackageSet = serde_json::from_reader(package_set_file)?;
+        let manifest_file = File::open(manifest_file).context(format!(
+            "Failed to open the package set file at {}",
+            manifest_file.display()
+        ))?;
+        let manifest: Manifest = serde_json::from_reader(manifest_file)
+            .context("Failed to parse the vessel.json file")?;
         Ok(Vessel {
             output_for_humans,
             package_set,
@@ -42,7 +53,7 @@ impl Vessel {
         }
     }
 
-    pub fn install_packages(&self) -> Result<Vec<(String, PathBuf)>, Box<dyn std::error::Error>> {
+    pub fn install_packages(&self) -> Result<Vec<(String, PathBuf)>> {
         let install_plan = self
             .package_set
             .transitive_deps(self.manifest.dependencies.clone());
@@ -70,11 +81,14 @@ impl Vessel {
             .collect())
     }
 
-    pub fn download_package(&self, package: &Package) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn download_package(&self, package: &Package) -> Result<()> {
         let package_dir = format!(".vessel/{}", package.name);
         let package_dir = Path::new(&package_dir);
         if !package_dir.exists() {
-            fs::create_dir_all(package_dir)?;
+            fs::create_dir_all(package_dir).context(format!(
+                "Failed to create the package directory at {}",
+                package_dir.display()
+            ))?;
         }
         let repo_dir = package_dir.join(&package.version);
         if !repo_dir.exists() {
@@ -119,7 +133,7 @@ impl Vessel {
         &self,
         entry_point: PathBuf,
         packages: Vec<(String, PathBuf)>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<()> {
         let mut package_flags = vec![
             "-wasi-system-api".to_string(),
             entry_point.display().to_string(),
@@ -134,39 +148,18 @@ impl Vessel {
         let moc_command = moc_command.args(&package_flags);
 
         debug!("About to run: {:?}", moc_command);
-        let output = moc_command.output()?;
+        let output = moc_command
+            .output()
+            .context("Failed to run the build command")?;
         if output.status.success() {
             self.for_humans(|| println!("{} Build successful.", "[Info]".blue()))
         } else {
-            eprintln!("{} Build failed with:", "[Error]".red());
-            io::stdout().write_all(&output.stdout).unwrap();
-            io::stderr().write_all(&output.stderr).unwrap();
+            io::stderr()
+                .write_all(&output.stderr)
+                .context("Failed to write compiler errors")?;
+            return Err(anyhow::anyhow!("Build failed"));
         }
         Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub enum Error {
-    MalformedRepo(PathBuf),
-    EmptyArchive(PathBuf),
-}
-
-impl std::error::Error for Error {}
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Error::MalformedRepo(dir) => write!(
-                f,
-                "[ERROR] {} should've been an unpacked repository, but wasn't",
-                dir.display()
-            ),
-            Error::EmptyArchive(dir) => write!(
-                f,
-                "[ERROR] Downloaded an empty archive to: {}",
-                dir.display()
-            ),
-        }
     }
 }
 
@@ -211,11 +204,7 @@ impl PackageSet {
     }
 }
 
-fn download_tar_ball(
-    dest: &Path,
-    repo: &str,
-    version: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
     let target = format!(
         "{}/archive/{}/.tar.gz",
         repo.trim_end_matches(".git"),
@@ -230,19 +219,19 @@ fn download_tar_ball(
 
     // We expect an unpacked repo to contain exactly one directory
     let repo_dir = match fs::read_dir(tmp_dir.path())?.next() {
-        None => return Err(Box::new(Error::EmptyArchive(tmp_dir.path().to_owned()))),
+        None => return Err(anyhow::anyhow!("Unpacked an empty tarball for {}", repo)),
         Some(dir) => dir?,
     };
 
     if !repo_dir.path().is_dir() {
-        return Err(Box::new(Error::MalformedRepo(repo_dir.path())));
+        return Err(anyhow::anyhow!("Failed to unpack tarball for \"{}\"", repo));
     }
     fs::rename(repo_dir.path(), dest)?;
 
     Ok(())
 }
 
-fn clone_package(dest: &Path, repo: &str, version: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn clone_package(dest: &Path, repo: &str, version: &str) -> Result<(), anyhow::Error> {
     let tmp_dir: TempDir = tempfile::tempdir()?;
     Command::new("git")
         .args(&["clone", repo, "repo"])
