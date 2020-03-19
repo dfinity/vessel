@@ -9,7 +9,7 @@ use structopt::StructOpt;
 struct Opts {
     #[structopt(long, parse(from_os_str), default_value = "package-set.json")]
     package_set: PathBuf,
-    #[structopt(long, parse(from_os_str), default_value = "manifest.json")]
+    #[structopt(long, parse(from_os_str), default_value = "vessel.json")]
     manifest: PathBuf,
     #[structopt(subcommand)]
     command: Command,

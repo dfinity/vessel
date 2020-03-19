@@ -5,9 +5,9 @@ use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use tar::Archive;
 use tempfile::TempDir;
-use std::process::Command;
 
 pub fn install_packages(package_set: &PathBuf, manifest: &PathBuf) -> Vec<(String, PathBuf)> {
     let package_set: PackageSet =
@@ -34,22 +34,26 @@ pub fn install_packages(package_set: &PathBuf, manifest: &PathBuf) -> Vec<(Strin
         .map(|p| {
             (
                 p.name.clone(),
-                PathBuf::from(&format!(".packages/{}/{}/src", p.name, p.version)),
+                PathBuf::from(&format!(".vessel/{}/{}/src", p.name, p.version)),
             )
         })
         .collect()
 }
 
 fn download_package(package: &Package) -> Result<(), Box<dyn std::error::Error>> {
-    let package_dir = format!(".packages/{}", package.name);
+    let package_dir = format!(".vessel/{}", package.name);
     let package_dir = Path::new(&package_dir);
     if !package_dir.exists() {
         fs::create_dir_all(package_dir)?;
     }
     let repo_dir = package_dir.join(&package.version);
     if !repo_dir.exists() {
-        println!("Downloading package: {}", package.name);
-        download_tar_ball(&repo_dir, &package.repo, &package.version)?
+        if package.repo.starts_with("https://github.com") {
+            download_tar_ball(&repo_dir, &package.repo, &package.version)
+                .or_else(|_| clone_package(&repo_dir, &package.repo, &package.version))?
+        } else {
+            clone_package(&repo_dir, &package.repo, &package.version)?
+        }
     }
     Ok(())
 }
@@ -150,11 +154,7 @@ fn download_tar_ball(
     Ok(())
 }
 
-fn clone_package(
-    dest: &Path,
-    repo: &str,
-    version: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn clone_package(dest: &Path, repo: &str, version: &str) -> Result<(), Box<dyn std::error::Error>> {
     let tmp_dir: TempDir = tempfile::tempdir()?;
     Command::new("git")
         .args(&["clone", repo, "repo"])
@@ -166,7 +166,10 @@ fn clone_package(
         .args(&["-c", "advice.detachedHead=false", "checkout", version])
         .current_dir(&repo_dir)
         .output()
-        .expect(&format!("Failed to checkout version {} for the repository {}", repo, version));
+        .expect(&format!(
+            "Failed to checkout version {} for the repository {} in {}",
+            version, repo, repo_dir.display()
+        ));
     fs::rename(repo_dir, dest)?;
     Ok(())
 }

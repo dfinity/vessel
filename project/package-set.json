@@ -9,6 +9,12 @@
         "name": "option",
         "repo": "https://github.com/kritzcreek/mo-option",
         "version": "v2.0.0",
+        "dependencies": ["stdlib"]
+    },
+    {
+        "name": "stdlib",
+        "repo": "file://C:/Users/Christoph/code/mo-stdlib",
+        "version": "v1.0.0",
         "dependencies": []
     }
 ]
