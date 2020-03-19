@@ -1,7 +1,7 @@
 use vessel;
 
+use pretty_env_logger;
 use std::path::PathBuf;
-use std::process;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -28,10 +28,13 @@ enum Command {
 }
 
 fn main() {
+    pretty_env_logger::init();
     let opts = Opts::from_args();
     match opts.command {
         Command::Install { list_packages } => {
-            let packages = vessel::install_packages(&opts.package_set, &opts.manifest);
+            let vessel =
+                vessel::Vessel::new(!list_packages, &opts.package_set, &opts.manifest).unwrap();
+            let packages = vessel.install_packages().unwrap();
             if list_packages {
                 for (name, path) in packages {
                     println!("--package {} {}", name, path.display().to_string())
@@ -39,23 +42,9 @@ fn main() {
             }
         }
         Command::Build { entry_point } => {
-            let packages = vessel::install_packages(&opts.package_set, &opts.manifest);
-
-            let mut package_flags = vec![
-                "-wasi-system-api".to_string(),
-                entry_point.display().to_string(),
-            ];
-            for (name, path) in packages {
-                package_flags.push("--package".to_string());
-                package_flags.push(name);
-                package_flags.push(path.display().to_string());
-            }
-
-            let mut moc_command = process::Command::new("moc");
-            let moc_command = moc_command.args(&package_flags);
-
-            println!("About to run: {:?}", moc_command);
-            moc_command.spawn().expect("Failed to start moc");
+            let vessel = vessel::Vessel::new(true, &opts.package_set, &opts.manifest).unwrap();
+            let packages = vessel.install_packages().unwrap();
+            vessel.build_module(entry_point, packages).unwrap();
         }
     }
 }

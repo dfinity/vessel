@@ -1,67 +1,149 @@
+use colored::*;
 use flate2::read::GzDecoder;
+use log::debug;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tar::Archive;
 use tempfile::TempDir;
 
-pub fn install_packages(package_set: &PathBuf, manifest: &PathBuf) -> Vec<(String, PathBuf)> {
-    let package_set: PackageSet =
-        match serde_json::from_reader(fs::File::open(package_set).unwrap()) {
-            Ok(ps) => ps,
-            Err(err) => panic!("Failed to parse {} with \"{}\"", package_set.display(), err),
-        };
-    let manifest: Manifest = match serde_json::from_reader(fs::File::open(manifest).unwrap()) {
-        Ok(m) => m,
-        Err(err) => panic!("Failed to parse {} with \"{}\"", manifest.display(), err),
-    };
-    let install_plan = package_set.transitive_deps(manifest.dependencies);
-
-    println!(
-        "Install plan: {}",
-        install_plan
-            .iter()
-            .map(|p| p.name.as_ref())
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-
-    for package in &install_plan {
-        download_package(package).unwrap()
-    }
-    println!("Finished installing.");
-
-    install_plan
-        .iter()
-        .map(|p| {
-            (
-                p.name.clone(),
-                PathBuf::from(&format!(".vessel/{}/{}/src", p.name, p.version)),
-            )
-        })
-        .collect()
+pub struct Vessel {
+    pub output_for_humans: bool,
+    pub package_set: PackageSet,
+    pub manifest: Manifest,
 }
 
-fn download_package(package: &Package) -> Result<(), Box<dyn std::error::Error>> {
-    let package_dir = format!(".vessel/{}", package.name);
-    let package_dir = Path::new(&package_dir);
-    if !package_dir.exists() {
-        fs::create_dir_all(package_dir)?;
+impl Vessel {
+    pub fn new(
+        output_for_humans: bool,
+        package_set_file: &PathBuf,
+        manifest_file: &PathBuf,
+    ) -> Result<Vessel, Box<dyn std::error::Error>> {
+        let package_set: PackageSet = serde_json::from_reader(fs::File::open(package_set_file)?)?;
+        let manifest: Manifest = serde_json::from_reader(fs::File::open(manifest_file)?)?;
+        Ok(Vessel {
+            output_for_humans,
+            package_set,
+            manifest,
+        })
     }
-    let repo_dir = package_dir.join(&package.version);
-    if !repo_dir.exists() {
-        if package.repo.starts_with("https://github.com") {
-            download_tar_ball(&repo_dir, &package.repo, &package.version)
-                .or_else(|_| clone_package(&repo_dir, &package.repo, &package.version))?
-        } else {
-            clone_package(&repo_dir, &package.repo, &package.version)?
+
+    pub fn for_humans<F>(&self, s: F)
+    where
+        F: FnOnce(),
+    {
+        if self.output_for_humans {
+            s()
         }
     }
-    Ok(())
+
+    pub fn install_packages(&self) -> Result<Vec<(String, PathBuf)>, Box<dyn std::error::Error>> {
+        let install_plan = self
+            .package_set
+            .transitive_deps(self.manifest.dependencies.clone());
+
+        self.for_humans(|| {
+            println!(
+                "{} Installing {} packages",
+                "[Info]".blue(),
+                install_plan.len()
+            )
+        });
+        for package in &install_plan {
+            self.download_package(package)?
+        }
+        self.for_humans(|| println!("{} Installation complete.", "[Info]".blue()));
+
+        Ok(install_plan
+            .iter()
+            .map(|p| {
+                (
+                    p.name.clone(),
+                    PathBuf::from(&format!(".vessel/{}/{}/src", p.name, p.version)),
+                )
+            })
+            .collect())
+    }
+
+    pub fn download_package(&self, package: &Package) -> Result<(), Box<dyn std::error::Error>> {
+        let package_dir = format!(".vessel/{}", package.name);
+        let package_dir = Path::new(&package_dir);
+        if !package_dir.exists() {
+            fs::create_dir_all(package_dir)?;
+        }
+        let repo_dir = package_dir.join(&package.version);
+        if !repo_dir.exists() {
+            if package.repo.starts_with("https://github.com") {
+                self.for_humans(|| {
+                    println!(
+                        "{} Downloading tar-ball: \"{}\"",
+                        "[Info]".blue(),
+                        package.name
+                    )
+                });
+                download_tar_ball(&repo_dir, &package.repo, &package.version).or_else(|_| {
+                    self.for_humans(|| {
+                        println!(
+                            "{} Downloading tar-ball failed, cloning as git repo instead: \"{}\"",
+                            "[Warn]".yellow(),
+                            package.name
+                        )
+                    });
+                    clone_package(&repo_dir, &package.repo, &package.version)
+                })?
+            } else {
+                self.for_humans(|| {
+                    println!(
+                        "{} Cloning git repository: \"{}\"",
+                        "[Info]".blue(),
+                        package.name
+                    )
+                });
+                clone_package(&repo_dir, &package.repo, &package.version)?
+            }
+        } else {
+            debug!(
+                "{} at version {} has already been downloaded",
+                package.name, package.version
+            )
+        }
+        Ok(())
+    }
+
+    pub fn build_module(
+        &self,
+        entry_point: PathBuf,
+        packages: Vec<(String, PathBuf)>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut package_flags = vec![
+            "-wasi-system-api".to_string(),
+            entry_point.display().to_string(),
+        ];
+        for (name, path) in packages {
+            package_flags.push("--package".to_string());
+            package_flags.push(name);
+            package_flags.push(path.display().to_string());
+        }
+
+        let mut moc_command = Command::new("moc");
+        let moc_command = moc_command.args(&package_flags);
+
+        debug!("About to run: {:?}", moc_command);
+        let output = moc_command.output()?;
+        if output.status.success() {
+            self.for_humans(|| println!("{} Build successful.", "[Info]".blue()))
+        } else {
+            eprintln!("{} Build failed with:", "[Error]".red());
+            io::stdout().write_all(&output.stdout).unwrap();
+            io::stderr().write_all(&output.stderr).unwrap();
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -88,24 +170,24 @@ impl fmt::Display for Error {
     }
 }
 
-type Url = String;
-type Tag = String;
-type Name = String;
+pub type Url = String;
+pub type Tag = String;
+pub type Name = String;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct Package {
-    name: Name,
-    repo: Url,
-    version: Tag,
-    dependencies: Vec<Name>,
+pub struct Package {
+    pub name: Name,
+    pub repo: Url,
+    pub version: Tag,
+    pub dependencies: Vec<Name>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct PackageSet(Vec<Package>);
+pub struct PackageSet(pub Vec<Package>);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-struct Manifest {
-    dependencies: Vec<Name>,
+pub struct Manifest {
+    pub dependencies: Vec<Name>,
 }
 
 impl PackageSet {
