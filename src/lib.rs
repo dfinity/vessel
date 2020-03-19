@@ -11,8 +11,14 @@ use tempfile::TempDir;
 
 pub fn install_packages(package_set: &PathBuf, manifest: &PathBuf) -> Vec<(String, PathBuf)> {
     let package_set: PackageSet =
-        serde_json::from_reader(fs::File::open(package_set).unwrap()).unwrap();
-    let manifest: Manifest = serde_json::from_reader(fs::File::open(manifest).unwrap()).unwrap();
+        match serde_json::from_reader(fs::File::open(package_set).unwrap()) {
+            Ok(ps) => ps,
+            Err(err) => panic!("Failed to parse {} with \"{}\"", package_set.display(), err),
+        };
+    let manifest: Manifest = match serde_json::from_reader(fs::File::open(manifest).unwrap()) {
+        Ok(m) => m,
+        Err(err) => panic!("Failed to parse {} with \"{}\"", manifest.display(), err),
+    };
     let install_plan = package_set.transitive_deps(manifest.dependencies);
 
     println!(
@@ -86,7 +92,7 @@ type Url = String;
 type Tag = String;
 type Name = String;
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct Package {
     name: Name,
     repo: Url,
@@ -94,7 +100,7 @@ struct Package {
     dependencies: Vec<Name>,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct PackageSet(Vec<Package>);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -168,7 +174,9 @@ fn clone_package(dest: &Path, repo: &str, version: &str) -> Result<(), Box<dyn s
         .output()
         .expect(&format!(
             "Failed to checkout version {} for the repository {} in {}",
-            version, repo, repo_dir.display()
+            version,
+            repo,
+            repo_dir.display()
         ));
     fs::rename(repo_dir, dest)?;
     Ok(())
