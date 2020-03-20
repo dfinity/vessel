@@ -31,9 +31,8 @@ impl Vessel {
             ))
             .context("Failed to parse the package set file")?;
         let package_set: PackageSet = serde_json::from_reader(package_set_file)?;
-        let manifest_file = File::open(manifest_file).context(
-            "Failed to open the vessel.json file"
-        )?;
+        let manifest_file =
+            File::open(manifest_file).context("Failed to open the vessel.json file")?;
         let manifest: Manifest = serde_json::from_reader(manifest_file)
             .context("Failed to parse the vessel.json file")?;
         Ok(Vessel {
@@ -162,6 +161,56 @@ impl Vessel {
     }
 }
 
+/// Downloads and unpacks a tar-ball from Github into the `dest` path
+fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
+    let target = format!(
+        "{}/archive/{}/.tar.gz",
+        repo.trim_end_matches(".git"),
+        version
+    );
+    let response = reqwest::blocking::get(&target)?;
+
+    // We unpack into a temporary directory and rename it in one go once
+    // the full unpacking was successful
+    let tmp_dir: TempDir = tempfile::tempdir()?;
+    Archive::new(GzDecoder::new(response)).unpack(tmp_dir.path())?;
+
+    // We expect an unpacked repo to contain exactly one directory
+    let repo_dir = match fs::read_dir(tmp_dir.path())?.next() {
+        None => return Err(anyhow::anyhow!("Unpacked an empty tarball for {}", repo)),
+        Some(dir) => dir?,
+    };
+
+    if !repo_dir.path().is_dir() {
+        return Err(anyhow::anyhow!("Failed to unpack tarball for \"{}\"", repo));
+    }
+    fs::rename(repo_dir.path(), dest)?;
+
+    Ok(())
+}
+
+fn clone_package(dest: &Path, repo: &str, version: &str) -> Result<(), anyhow::Error> {
+    let tmp_dir: TempDir = tempfile::tempdir()?;
+    Command::new("git")
+        .args(&["clone", repo, "repo"])
+        .current_dir(tmp_dir.path())
+        .output()
+        .context(format!("Failed to clone the repo at {}", repo))?;
+    let repo_dir = tmp_dir.path().join("repo");
+    Command::new("git")
+        .args(&["-c", "advice.detachedHead=false", "checkout", version])
+        .current_dir(&repo_dir)
+        .output()
+        .context(format!(
+            "Failed to checkout version {} for the repository {} in {}",
+            version,
+            repo,
+            repo_dir.display()
+        ))?;
+    fs::rename(repo_dir, dest)?;
+    Ok(())
+}
+
 pub type Url = String;
 pub type Tag = String;
 pub type Name = String;
@@ -199,55 +248,57 @@ impl PackageSet {
                 found.insert(next);
             }
         }
+        // Once we have incremental compilation we could return these toposorted to allow 
+        // starting to compile the first packages while others are still being downloaded.
+        // For now we sort them to get deterministic behaviour for testing.
+        let mut found: Vec<Name> = found.into_iter().collect();
+        found.sort();
         found.iter().map(|n| self.find(n)).collect()
     }
 }
 
-fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
-    let target = format!(
-        "{}/archive/{}/.tar.gz",
-        repo.trim_end_matches(".git"),
-        version
-    );
-    let response = reqwest::blocking::get(&target)?;
+#[cfg(test)]
+mod test {
+    use super::*;
 
-    // We unpack into a temporary directory and rename it in one go once
-    // the full unpacking was successful
-    let tmp_dir: TempDir = tempfile::tempdir()?;
-    Archive::new(GzDecoder::new(response)).unpack(tmp_dir.path())?;
-
-    // We expect an unpacked repo to contain exactly one directory
-    let repo_dir = match fs::read_dir(tmp_dir.path())?.next() {
-        None => return Err(anyhow::anyhow!("Unpacked an empty tarball for {}", repo)),
-        Some(dir) => dir?,
-    };
-
-    if !repo_dir.path().is_dir() {
-        return Err(anyhow::anyhow!("Failed to unpack tarball for \"{}\"", repo));
+    fn mk_package(name: &str, deps: Vec<&str>) -> Package {
+        Package {
+            name: name.to_string(),
+            repo: "".to_string(),
+            version: "".to_string(),
+            dependencies: deps.into_iter().map(|x| x.to_string()).collect(),
+        }
     }
-    fs::rename(repo_dir.path(), dest)?;
 
-    Ok(())
-}
+    #[test]
+    fn it_finds_a_transitive_dependency() {
+        let a = mk_package("A", vec!["B"]);
+        let b = mk_package("B", vec![]);
+        let ps = PackageSet(vec![a.clone(), b.clone()]);
+        assert_eq!(
+            vec![&b],
+            ps.transitive_deps(vec!["B".to_string()])
+        );
+        assert_eq!(
+            vec![&a, &b],
+            ps.transitive_deps(vec!["A".to_string()])
+        )
+    }
 
-fn clone_package(dest: &Path, repo: &str, version: &str) -> Result<(), anyhow::Error> {
-    let tmp_dir: TempDir = tempfile::tempdir()?;
-    Command::new("git")
-        .args(&["clone", repo, "repo"])
-        .current_dir(tmp_dir.path())
-        .output()
-        .expect(&format!("Failed to clone the repo at {}", repo));
-    let repo_dir = tmp_dir.path().join("repo");
-    Command::new("git")
-        .args(&["-c", "advice.detachedHead=false", "checkout", version])
-        .current_dir(&repo_dir)
-        .output()
-        .expect(&format!(
-            "Failed to checkout version {} for the repository {} in {}",
-            version,
-            repo,
-            repo_dir.display()
-        ));
-    fs::rename(repo_dir, dest)?;
-    Ok(())
+    #[test]
+    fn it_finds_transitive_dependencies_with_overlaps() {
+        let a = mk_package("A", vec!["B"]);
+        let b = mk_package("B", vec![]);
+        let c = mk_package("C", vec!["B"]);
+        let ps = PackageSet(vec![a.clone(), b.clone(), c.clone()]);
+        assert_eq!(
+            vec![&a, &b, &c],
+            ps.transitive_deps(vec!["A".to_string(), "C".to_string()])
+        );
+
+        assert_eq!(
+            vec![&b, &c],
+            ps.transitive_deps(vec!["C".to_string()])
+        )
+    }
 }
