@@ -271,11 +271,11 @@ pub struct Manifest {
 }
 
 impl PackageSet {
-    fn find(&self, name: &Name) -> &Package {
-        self.0.iter().find(|p| p.name == *name).expect(&format!(
-            "Package \"{}\" wasn't specified in the package set",
-            name
-        ))
+    fn find(&self, name: &str) -> &Package {
+        self.0
+            .iter()
+            .find(|p| p.name == *name)
+            .unwrap_or_else(|| panic!("Package \"{}\" wasn't specified in the package set", name))
     }
 
     fn transitive_deps(&self, entry_points: Vec<Name>) -> Vec<&Package> {
