@@ -3,6 +3,8 @@ name = "vessel"
 version = "0.1.0"
 authors = ["kritzcreek <christoph.hegemann1337@gmail.com>"]
 edition = "2018"
+description = "A simple package manager for the Motoko programming language."
+license = "MPL-2.0+"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

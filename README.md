@@ -44,3 +44,8 @@ Now you can depend on this package by adding `mypackage` to your `vessel.json` f
 ### How do I integrate `vessel` into my custom build?
 Running `vessel build --list-packages` will return flags in a format you can pass directly to the various compiler tools.
 
+## Licence
+
+Copyright 2020 Christoph Hegemann
+
+This software is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
