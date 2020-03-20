@@ -18,6 +18,7 @@ struct Opts {
 
 #[derive(Debug, StructOpt)]
 enum Command {
+    Init,
     Install {
         #[structopt(long)]
         list_packages: bool,
@@ -32,6 +33,7 @@ fn main() -> Result<()> {
     pretty_env_logger::init();
     let opts = Opts::from_args();
     match opts.command {
+        Command::Init => vessel::init(),
         Command::Install { list_packages } => {
             let vessel = vessel::Vessel::new(!list_packages, &opts.package_set, &opts.manifest)?;
             let packages = vessel.install_packages()?;
