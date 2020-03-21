@@ -14,13 +14,13 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_name: vessel
-            asset_name: vessel-linux-amd64
+            asset_name: vessel-linux64
           - os: windows-latest
             artifact_name: vessel.exe
-            asset_name: vessel-windows-amd64
+            asset_name: vessel-windows64.exe
           - os: macos-latest
             artifact_name: vessel
-            asset_name: vessel-macos-amd64
+            asset_name: vessel-macos
 
     steps:
     - name: Install stable toolchain
