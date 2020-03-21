@@ -6,7 +6,6 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, File};
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tar::Archive;
@@ -125,6 +124,7 @@ impl Vessel {
         }
         Ok(())
     }
+}
 
 /// Downloads and unpacks a tar-ball from Github into the `dest` path
 fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
