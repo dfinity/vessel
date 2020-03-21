@@ -49,6 +49,7 @@ impl Vessel {
         }
     }
 
+    /// Installs all transitive dependencies and returns a mapping of package name -> installation location
     pub fn install_packages(&self) -> Result<Vec<(String, PathBuf)>> {
         let install_plan = self
             .package_set
@@ -77,6 +78,7 @@ impl Vessel {
             .collect())
     }
 
+    /// Downloads a package either as a tar-ball from Github or clones it as a repo
     pub fn download_package(&self, package: &Package) -> Result<()> {
         let package_dir = format!(".vessel/{}", package.name);
         let package_dir = Path::new(&package_dir);
@@ -154,6 +156,7 @@ fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
     Ok(())
 }
 
+/// Clones `repo` into `dest` and checks out `version`
 fn clone_package(dest: &Path, repo: &str, version: &str) -> Result<()> {
     let tmp_dir: TempDir = tempfile::tempdir()?;
     Command::new("git")
@@ -244,6 +247,8 @@ impl PackageSet {
             .unwrap_or_else(|| panic!("Package \"{}\" wasn't specified in the package set", name))
     }
 
+    /// Finds all transitive dependencies starting from the given package names.
+    /// Includes the entry points in the resulting vector
     fn transitive_deps(&self, entry_points: Vec<Name>) -> Vec<&Package> {
         let mut found: HashSet<Name> = HashSet::new();
         let mut todo: Vec<Name> = entry_points;

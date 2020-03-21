@@ -24,7 +24,8 @@ enum Command {
     Init,
     /// Installs all dependencies and prints a human readable summary
     Install,
-    /// Installs all dependencies and outputs the package flags to be passed on to the Motoko compiler
+    /// Installs all dependencies and outputs the package flags to be passed on
+    /// to the Motoko compiler tools
     Sources,
 }
 
