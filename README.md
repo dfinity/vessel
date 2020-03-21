@@ -4,9 +4,11 @@ A simple package manager for the Motoko programming language.
 
 ## Getting started
 1. Download a copy of the `vessel` binary from the release page or build one yourself
-2. Run `vessel init` in your project root
-3. Run `vessel build src/main.mo` (adjust the path to point to your entry point)
-4. Now `wasmtime main.wasm` should run your compiled project
+2. Run `vessel init` in your project root.
+3. Edit `vessel.json` to include your dependencies (potentially also
+   edit `package-set.json` to include additional package sources)
+4. Run `moc $(vessel sources) main.mo` to compile the `main.mo` file
+   with the installed packages in scope
 
 ## How it works
 `vessel` is inspired by the [spago](https://github.com/purescript/spago) package manager for PureScript. Any git repository with a `src/` directory is a valid package to `vessel`, which is a flexible and lightweight approach to package management, that is easily extended with more guarantees and features as our community grows. The two concepts you need to understand to work with `vessel` are _package sets_ and the _manifest_ file.
@@ -42,7 +44,7 @@ Make sure your local package is a git repository, then add an entry like so to y
 Now you can depend on this package by adding `mypackage` to your `vessel.json` file.
 
 ### How do I integrate `vessel` into my custom build?
-Running `vessel build --list-packages` will return flags in a format you can pass directly to the various compiler tools.
+Running `vessel sources` will return flags in a format you can pass directly to the various compiler tools.
 
 ## Licence
 

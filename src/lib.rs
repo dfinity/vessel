@@ -126,40 +126,6 @@ impl Vessel {
         Ok(())
     }
 
-    pub fn build_module(
-        &self,
-        entry_point: PathBuf,
-        packages: Vec<(String, PathBuf)>,
-    ) -> Result<()> {
-        let mut package_flags = vec![
-            "-wasi-system-api".to_string(),
-            entry_point.display().to_string(),
-        ];
-        for (name, path) in packages {
-            package_flags.push("--package".to_string());
-            package_flags.push(name);
-            package_flags.push(path.display().to_string());
-        }
-
-        let mut moc_command = Command::new("moc");
-        let moc_command = moc_command.args(&package_flags);
-
-        debug!("About to run: {:?}", moc_command);
-        let output = moc_command
-            .output()
-            .context("Failed to run the build command")?;
-        if output.status.success() {
-            self.for_humans(|| println!("{} Build successful.", "[Info]".blue()))
-        } else {
-            io::stderr()
-                .write_all(&output.stderr)
-                .context("Failed to write compiler errors")?;
-            return Err(anyhow::anyhow!("Build failed"));
-        }
-        Ok(())
-    }
-}
-
 /// Downloads and unpacks a tar-ball from Github into the `dest` path
 fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
     let target = format!(

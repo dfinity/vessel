@@ -19,14 +19,8 @@ struct Opts {
 #[derive(Debug, StructOpt)]
 enum Command {
     Init,
-    Install {
-        #[structopt(long)]
-        list_packages: bool,
-    },
-    Build {
-        #[structopt(parse(from_os_str))]
-        entry_point: PathBuf,
-    },
+    Install,
+    Sources,
 }
 
 fn main() -> Result<()> {
@@ -34,20 +28,17 @@ fn main() -> Result<()> {
     let opts = Opts::from_args();
     match opts.command {
         Command::Init => vessel::init(),
-        Command::Install { list_packages } => {
-            let vessel = vessel::Vessel::new(!list_packages, &opts.package_set, &opts.manifest)?;
-            let packages = vessel.install_packages()?;
-            if list_packages {
-                for (name, path) in packages {
-                    println!("--package {} {}", name, path.display().to_string())
-                }
-            }
+        Command::Install => {
+            let vessel = vessel::Vessel::new(true, &opts.package_set, &opts.manifest)?;
+            let _ = vessel.install_packages()?;
             Ok(())
         }
-        Command::Build { entry_point } => {
-            let vessel = vessel::Vessel::new(true, &opts.package_set, &opts.manifest)?;
-            let packages = vessel.install_packages()?;
-            vessel.build_module(entry_point, packages)
+        Command::Sources => {
+            let vessel = vessel::Vessel::new(false, &opts.package_set, &opts.manifest)?;
+            for (name, path) in vessel.install_packages()? {
+                print!(" --package {} {}", name, path.display().to_string())
+            }
+            Ok(())
         }
     }
 }
