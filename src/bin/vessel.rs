@@ -8,8 +8,10 @@ use structopt::StructOpt;
 #[derive(Debug, StructOpt)]
 #[structopt(about = "Simple package management for Motoko")]
 struct Opts {
+    /// Which file to read the package set from
     #[structopt(long, parse(from_os_str), default_value = "package-set.json")]
     package_set: PathBuf,
+    /// Which file to read as the manifest file
     #[structopt(long, parse(from_os_str), default_value = "vessel.json")]
     manifest: PathBuf,
     #[structopt(subcommand)]
@@ -18,8 +20,11 @@ struct Opts {
 
 #[derive(Debug, StructOpt)]
 enum Command {
+    /// Sets up the minimal project configuration
     Init,
+    /// Installs all dependencies and prints a human readable summary
     Install,
+    /// Installs all dependencies and outputs the package flags to be passed on to the Motoko compiler
     Sources,
 }
 
@@ -35,9 +40,13 @@ fn main() -> Result<()> {
         }
         Command::Sources => {
             let vessel = vessel::Vessel::new(false, &opts.package_set, &opts.manifest)?;
-            for (name, path) in vessel.install_packages()? {
-                print!(" --package {} {}", name, path.display().to_string())
-            }
+            let sources = vessel
+                .install_packages()?
+                .into_iter()
+                .map(|(name, path)| format!("--package {} {}", name, path.display().to_string()))
+                .collect::<Vec<_>>()
+                .join(" ");
+            print!("{}", sources);
             Ok(())
         }
     }
