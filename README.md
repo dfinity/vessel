@@ -46,7 +46,7 @@ Now you can depend on this package by adding `mypackage` to your `vessel.json` f
 ### How do I integrate `vessel` into my custom build?
 Running `vessel sources` will return flags in a format you can pass directly to the various compiler tools.
 
-## Licence
+## License
 
 Copyright 2020 Christoph Hegemann
 
