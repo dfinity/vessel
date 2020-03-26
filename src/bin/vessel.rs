@@ -11,9 +11,6 @@ struct Opts {
     /// Which file to read the package set from
     #[structopt(long, parse(from_os_str), default_value = "package-set.json")]
     package_set: PathBuf,
-    /// Which file to read as the manifest file
-    #[structopt(long, parse(from_os_str), default_value = "vessel.json")]
-    manifest: PathBuf,
     #[structopt(subcommand)]
     command: Command,
 }
@@ -35,12 +32,12 @@ fn main() -> Result<()> {
     match opts.command {
         Command::Init => vessel::init(),
         Command::Install => {
-            let vessel = vessel::Vessel::new(true, &opts.package_set, &opts.manifest)?;
+            let vessel = vessel::Vessel::new(true, &opts.package_set)?;
             let _ = vessel.install_packages()?;
             Ok(())
         }
         Command::Sources => {
-            let vessel = vessel::Vessel::new(false, &opts.package_set, &opts.manifest)?;
+            let vessel = vessel::Vessel::new(false, &opts.package_set)?;
             let sources = vessel
                 .install_packages()?
                 .into_iter()

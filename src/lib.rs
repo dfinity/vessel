@@ -18,19 +18,15 @@ pub struct Vessel {
 }
 
 impl Vessel {
-    pub fn new(
-        output_for_humans: bool,
-        package_set_file: &PathBuf,
-        manifest_file: &PathBuf,
-    ) -> Result<Vessel> {
+    pub fn new(output_for_humans: bool, package_set_file: &PathBuf) -> Result<Vessel> {
         let package_set_file = File::open(package_set_file).context(format!(
-            "Failed to open the package set file at {}",
+            "Failed to open the package set file at \"{}\"",
             package_set_file.display()
         ))?;
         let package_set: PackageSet = serde_json::from_reader(package_set_file)
             .context("Failed to parse the package set file")?;
         let manifest_file =
-            File::open(manifest_file).context("Failed to open the vessel.json file")?;
+            File::open("vessel.json").context("Failed to open the vessel.json file")?;
         let manifest: Manifest = serde_json::from_reader(manifest_file)
             .context("Failed to parse the vessel.json file")?;
         Ok(Vessel {
