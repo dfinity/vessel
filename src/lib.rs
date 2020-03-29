@@ -123,7 +123,7 @@ impl Vessel {
     }
 
     /// Verifies that every source file inside the given package compiles in the current package set
-    pub fn verify_package(&self, name: &Name) -> Result<()> {
+    pub fn verify_package(&self, name: &str) -> Result<()> {
         match self.package_set.find(name) {
             None => Err(anyhow::anyhow!(
                 "The package \"{}\" does not exist in the package set",
