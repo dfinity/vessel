@@ -6,10 +6,12 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, File};
+use std::iter::Iterator;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tar::Archive;
 use tempfile::TempDir;
+use walkdir::WalkDir;
 
 pub struct Vessel {
     pub output_for_humans: bool,
@@ -46,7 +48,7 @@ impl Vessel {
     }
 
     /// Installs all transitive dependencies and returns a mapping of package name -> installation location
-    pub fn install_packages(&self) -> Result<Vec<(String, PathBuf)>> {
+    pub fn install_packages(&self) -> Result<Vec<(Name, PathBuf)>> {
         let install_plan = self
             .package_set
             .transitive_deps(self.manifest.dependencies.clone());
@@ -58,28 +60,25 @@ impl Vessel {
                 install_plan.len()
             )
         });
-        for package in &install_plan {
-            self.download_package(package)?
-        }
+
+        let paths = install_plan
+            .iter()
+            .map(|package| {
+                self.download_package(package)
+                    .map(|path| (package.name.clone(), path))
+            })
+            .collect::<Result<Vec<(String, PathBuf)>>>()?;
+
         self.for_humans(|| println!("{} Installation complete.", "[Info]".blue()));
 
-        Ok(install_plan
-            .iter()
-            .map(|p| {
-                (
-                    p.name.clone(),
-                    PathBuf::from(&format!(".vessel/{}/{}/src", p.name, p.version)),
-                )
-            })
-            .collect())
+        Ok(paths)
     }
 
     /// Downloads a package either as a tar-ball from Github or clones it as a repo
-    pub fn download_package(&self, package: &Package) -> Result<()> {
-        let package_dir = format!(".vessel/{}", package.name);
-        let package_dir = Path::new(&package_dir);
+    pub fn download_package(&self, package: &Package) -> Result<PathBuf> {
+        let package_dir = Path::new(".vessel").join(package.name.clone());
         if !package_dir.exists() {
-            fs::create_dir_all(package_dir).context(format!(
+            fs::create_dir_all(&package_dir).context(format!(
                 "Failed to create the package directory at {}",
                 package_dir.display()
             ))?;
@@ -119,6 +118,42 @@ impl Vessel {
                 "{} at version {} has already been downloaded",
                 package.name, package.version
             )
+        }
+        Ok(repo_dir.join("src"))
+    }
+
+    /// Verifies that every source file inside the given package compiles in the current package set
+    pub fn verify_package(&self, name: &Name) -> Result<()> {
+        match self.package_set.find(name) {
+            None => Err(anyhow::anyhow!(
+                "The package \"{}\" does not exist in the package set",
+                name
+            )),
+            Some(package) => {
+                let mut cmd = Command::new("moc");
+                cmd.arg("--check");
+                self.download_package(package)?;
+                let dependencies = self
+                    .package_set
+                    .transitive_deps(package.dependencies.clone());
+                for package in dependencies {
+                    let path = self.download_package(package)?;
+                    cmd.arg("--package").arg(&package.name).arg(path);
+                }
+
+                package.sources().for_each(|entry_point| {
+                    cmd.arg(entry_point);
+                });
+                // TODO: Execute command instead
+                println!("{:?}", cmd);
+                Ok(())
+            }
+        }
+    }
+
+    pub fn verify_all(&self) -> Result<()> {
+        for package in &self.package_set.0 {
+            self.verify_package(&package.name)?
         }
         Ok(())
     }
@@ -227,6 +262,33 @@ pub struct Package {
     pub dependencies: Vec<Name>,
 }
 
+impl Package {
+    pub fn install_path(&self) -> PathBuf {
+        Path::new(".vessel")
+            .join(self.name.clone())
+            .join(self.version.clone())
+            .join("src")
+    }
+
+    /// Returns all Motoko sources found inside this package's installation directory
+    pub fn sources(&self) -> impl Iterator<Item = PathBuf> {
+        WalkDir::new(self.install_path())
+            .into_iter()
+            .filter_map(|e| match e {
+                Err(_) => None,
+                Ok(entry) => {
+                    let file_name = entry.path();
+                    if let Some(ext) = file_name.extension() {
+                        if ext == "mo" {
+                            return Some(file_name.to_owned());
+                        }
+                    }
+                    None
+                }
+            })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PackageSet(pub Vec<Package>);
 
@@ -236,10 +298,13 @@ pub struct Manifest {
 }
 
 impl PackageSet {
-    fn find(&self, name: &str) -> &Package {
-        self.0
-            .iter()
-            .find(|p| p.name == *name)
+    /// Finds a package by name
+    fn find(&self, name: &str) -> Option<&Package> {
+        self.0.iter().find(|p| p.name == *name)
+    }
+
+    fn find_unsafe(&self, name: &str) -> &Package {
+        self.find(name)
             .unwrap_or_else(|| panic!("Package \"{}\" wasn't specified in the package set", name))
     }
 
@@ -250,7 +315,7 @@ impl PackageSet {
         let mut todo: Vec<Name> = entry_points;
         while let Some(next) = todo.pop() {
             if !found.contains(&next) {
-                todo.append(&mut self.find(&next).dependencies.clone());
+                todo.append(&mut self.find_unsafe(&next).dependencies.clone());
                 found.insert(next);
             }
         }
@@ -259,7 +324,7 @@ impl PackageSet {
         // For now we sort them to get deterministic behaviour for testing.
         let mut found: Vec<Name> = found.into_iter().collect();
         found.sort();
-        found.iter().map(|n| self.find(n)).collect()
+        found.iter().map(|n| self.find_unsafe(n)).collect()
     }
 }
 

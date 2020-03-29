@@ -24,6 +24,8 @@ enum Command {
     /// Installs all dependencies and outputs the package flags to be passed on
     /// to the Motoko compiler tools
     Sources,
+    /// Verifies that every package in the package set builds successfully
+    Verify,
 }
 
 fn main() -> Result<()> {
@@ -46,6 +48,10 @@ fn main() -> Result<()> {
                 .join(" ");
             print!("{}", sources);
             Ok(())
+        }
+        Command::Verify => {
+            let vessel = vessel::Vessel::new(true, &opts.package_set)?;
+            vessel.verify_all()
         }
     }
 }
