@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tar::Archive;
 use tempfile::TempDir;
+use topological_sort::TopologicalSort;
 use walkdir::WalkDir;
 
 pub struct Vessel {
@@ -144,18 +145,50 @@ impl Vessel {
                 package.sources().for_each(|entry_point| {
                     cmd.arg(entry_point);
                 });
-                // TODO: Execute command instead
-                println!("{:?}", cmd);
-                Ok(())
+                let output = cmd.output()?;
+                if output.status.success() {
+                    println!("{} Verified \"{}\"", "[Info]".blue(), package.name);
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!(
+                        "Failed to verify \"{}\" with:\n{}",
+                        package.name,
+                        String::from_utf8(output.stderr)?
+                    ))
+                }
             }
         }
     }
 
     pub fn verify_all(&self) -> Result<()> {
-        for package in &self.package_set.0 {
-            self.verify_package(&package.name)?
+        let mut errors: Vec<(Name, anyhow::Error)> = vec![];
+        for package in &self.package_set.topo_sorted() {
+            if errors
+                .iter()
+                .find(|(n, _)| package.dependencies.contains(n))
+                .is_none()
+            {
+                match self.verify_package(&package.name) {
+                    Err(err) => errors.push((package.name.clone(), err)),
+                    Ok(_) => {}
+                }
+            }
         }
-        Ok(())
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            let err = anyhow::anyhow!(
+                "Failed to verify: {:?}",
+                errors
+                    .iter()
+                    .map(|(n, _)| n.clone())
+                    .collect::<Vec<String>>()
+            );
+            for err in errors.iter().rev() {
+                eprintln!("{}", err.1);
+            }
+            Err(err)
+        }
     }
 }
 
@@ -325,6 +358,17 @@ impl PackageSet {
         let mut found: Vec<Name> = found.into_iter().collect();
         found.sort();
         found.iter().map(|n| self.find_unsafe(n)).collect()
+    }
+
+    pub fn topo_sorted(&self) -> Vec<&Package> {
+        let mut ts = TopologicalSort::<&str>::new();
+        for package in &self.0 {
+            ts.insert(package.name.as_ref());
+            for dep in &package.dependencies {
+                ts.add_dependency(dep.as_ref(), package.name.as_ref())
+            }
+        }
+        ts.map(|name| self.find_unsafe(name)).collect()
     }
 }
 
