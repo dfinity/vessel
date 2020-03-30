@@ -168,9 +168,8 @@ impl Vessel {
                 .find(|(n, _)| package.dependencies.contains(n))
                 .is_none()
             {
-                match self.verify_package(&package.name) {
-                    Err(err) => errors.push((package.name.clone(), err)),
-                    Ok(_) => {}
+                if let Err(err) = self.verify_package(&package.name) {
+                    errors.push((package.name.clone(), err))
                 }
             }
         }
