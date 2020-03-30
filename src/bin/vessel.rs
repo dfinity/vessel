@@ -25,7 +25,11 @@ enum Command {
     /// to the Motoko compiler tools
     Sources,
     /// Verifies that every package in the package set builds successfully
-    Verify,
+    Verify {
+        /// When specified only verified the given package name
+        #[structopt()]
+        package: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -49,9 +53,12 @@ fn main() -> Result<()> {
             print!("{}", sources);
             Ok(())
         }
-        Command::Verify => {
+        Command::Verify { package } => {
             let vessel = vessel::Vessel::new(true, &opts.package_set)?;
-            vessel.verify_all()
+            match package {
+                None => vessel.verify_all(),
+                Some(package) => vessel.verify_package(&package),
+            }
         }
     }
 }
