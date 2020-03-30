@@ -14,6 +14,7 @@ use tempfile::TempDir;
 use topological_sort::TopologicalSort;
 use walkdir::WalkDir;
 
+#[derive(Debug, Default)]
 pub struct Vessel {
     pub output_for_humans: bool,
     pub package_set: PackageSet,
@@ -22,21 +23,39 @@ pub struct Vessel {
 
 impl Vessel {
     pub fn new(output_for_humans: bool, package_set_file: &PathBuf) -> Result<Vessel> {
+        let mut new_vessel: Vessel = Default::default();
+        new_vessel.output_for_humans = output_for_humans;
+        new_vessel.read_package_set(package_set_file)?;
+        new_vessel.read_manifest_file()?;
+        Ok(new_vessel)
+    }
+
+    pub fn new_without_manifest(
+        output_for_humans: bool,
+        package_set_file: &PathBuf,
+    ) -> Result<Vessel> {
+        let mut new_vessel: Vessel = Default::default();
+        new_vessel.output_for_humans = output_for_humans;
+        new_vessel.read_package_set(package_set_file)?;
+        Ok(new_vessel)
+    }
+
+    fn read_manifest_file(&mut self) -> Result<()> {
+        let manifest_file =
+            File::open("vessel.json").context("Failed to open the vessel.json file")?;
+        self.manifest = serde_json::from_reader(manifest_file)
+            .context("Failed to parse the vessel.json file")?;
+        Ok(())
+    }
+
+    fn read_package_set(&mut self, package_set_file: &PathBuf) -> Result<()> {
         let package_set_file = File::open(package_set_file).context(format!(
             "Failed to open the package set file at \"{}\"",
             package_set_file.display()
         ))?;
-        let package_set: PackageSet = serde_json::from_reader(package_set_file)
+        self.package_set = serde_json::from_reader(package_set_file)
             .context("Failed to parse the package set file")?;
-        let manifest_file =
-            File::open("vessel.json").context("Failed to open the vessel.json file")?;
-        let manifest: Manifest = serde_json::from_reader(manifest_file)
-            .context("Failed to parse the vessel.json file")?;
-        Ok(Vessel {
-            output_for_humans,
-            package_set,
-            manifest,
-        })
+        Ok(())
     }
 
     pub fn for_humans<F>(&self, s: F)
@@ -324,10 +343,10 @@ impl Package {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct PackageSet(pub Vec<Package>);
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct Manifest {
     pub dependencies: Vec<Name>,
 }

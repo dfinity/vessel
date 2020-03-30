@@ -57,7 +57,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Verify { moc_args, package } => {
-            let vessel = vessel::Vessel::new(true, &opts.package_set)?;
+            let vessel = vessel::Vessel::new_without_manifest(true, &opts.package_set)?;
             match package {
                 None => vessel.verify_all(&moc_args),
                 Some(package) => vessel.verify_package(&moc_args, &package),
