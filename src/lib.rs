@@ -134,7 +134,7 @@ impl Vessel {
                 let mut cmd = Command::new("moc");
                 cmd.arg("--check");
                 if let Some(args) = moc_args {
-                    cmd.args(args.split(" "));
+                    cmd.args(args.split(' '));
                 }
                 self.download_package(package)?;
                 let dependencies = self
