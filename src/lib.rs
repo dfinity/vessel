@@ -124,7 +124,7 @@ impl Vessel {
     }
 
     /// Verifies that every source file inside the given package compiles in the current package set
-    pub fn verify_package(&self, name: &str) -> Result<()> {
+    pub fn verify_package(&self, moc_args: &Option<String>, name: &str) -> Result<()> {
         match self.package_set.find(name) {
             None => Err(anyhow::anyhow!(
                 "The package \"{}\" does not exist in the package set",
@@ -133,6 +133,9 @@ impl Vessel {
             Some(package) => {
                 let mut cmd = Command::new("moc");
                 cmd.arg("--check");
+                if let Some(args) = moc_args {
+                    cmd.args(args.split(" "));
+                }
                 self.download_package(package)?;
                 let dependencies = self
                     .package_set
@@ -160,7 +163,7 @@ impl Vessel {
         }
     }
 
-    pub fn verify_all(&self) -> Result<()> {
+    pub fn verify_all(&self, moc_args: &Option<String>) -> Result<()> {
         let mut errors: Vec<(Name, anyhow::Error)> = vec![];
         for package in &self.package_set.topo_sorted() {
             if errors
@@ -168,7 +171,7 @@ impl Vessel {
                 .find(|(n, _)| package.dependencies.contains(n))
                 .is_none()
             {
-                if let Err(err) = self.verify_package(&package.name) {
+                if let Err(err) = self.verify_package(moc_args, &package.name) {
                     errors.push((package.name.clone(), err))
                 }
             }

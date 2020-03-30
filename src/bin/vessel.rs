@@ -26,6 +26,9 @@ enum Command {
     Sources,
     /// Verifies that every package in the package set builds successfully
     Verify {
+        /// Additional arguments to pass to `moc` when checking packages
+        #[structopt(long)]
+        moc_args: Option<String>,
         /// When specified only verified the given package name
         #[structopt()]
         package: Option<String>,
@@ -53,11 +56,11 @@ fn main() -> Result<()> {
             print!("{}", sources);
             Ok(())
         }
-        Command::Verify { package } => {
+        Command::Verify { moc_args, package } => {
             let vessel = vessel::Vessel::new(true, &opts.package_set)?;
             match package {
-                None => vessel.verify_all(),
-                Some(package) => vessel.verify_package(&package),
+                None => vessel.verify_all(&moc_args),
+                Some(package) => vessel.verify_package(&moc_args, &package),
             }
         }
     }
