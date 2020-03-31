@@ -6,11 +6,15 @@ use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, File};
+use std::iter::Iterator;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tar::Archive;
 use tempfile::TempDir;
+use topological_sort::TopologicalSort;
+use walkdir::WalkDir;
 
+#[derive(Debug, Default)]
 pub struct Vessel {
     pub output_for_humans: bool,
     pub package_set: PackageSet,
@@ -19,21 +23,39 @@ pub struct Vessel {
 
 impl Vessel {
     pub fn new(output_for_humans: bool, package_set_file: &PathBuf) -> Result<Vessel> {
+        let mut new_vessel: Vessel = Default::default();
+        new_vessel.output_for_humans = output_for_humans;
+        new_vessel.read_package_set(package_set_file)?;
+        new_vessel.read_manifest_file()?;
+        Ok(new_vessel)
+    }
+
+    pub fn new_without_manifest(
+        output_for_humans: bool,
+        package_set_file: &PathBuf,
+    ) -> Result<Vessel> {
+        let mut new_vessel: Vessel = Default::default();
+        new_vessel.output_for_humans = output_for_humans;
+        new_vessel.read_package_set(package_set_file)?;
+        Ok(new_vessel)
+    }
+
+    fn read_manifest_file(&mut self) -> Result<()> {
+        let manifest_file =
+            File::open("vessel.json").context("Failed to open the vessel.json file")?;
+        self.manifest = serde_json::from_reader(manifest_file)
+            .context("Failed to parse the vessel.json file")?;
+        Ok(())
+    }
+
+    fn read_package_set(&mut self, package_set_file: &PathBuf) -> Result<()> {
         let package_set_file = File::open(package_set_file).context(format!(
             "Failed to open the package set file at \"{}\"",
             package_set_file.display()
         ))?;
-        let package_set: PackageSet = serde_json::from_reader(package_set_file)
+        self.package_set = serde_json::from_reader(package_set_file)
             .context("Failed to parse the package set file")?;
-        let manifest_file =
-            File::open("vessel.json").context("Failed to open the vessel.json file")?;
-        let manifest: Manifest = serde_json::from_reader(manifest_file)
-            .context("Failed to parse the vessel.json file")?;
-        Ok(Vessel {
-            output_for_humans,
-            package_set,
-            manifest,
-        })
+        Ok(())
     }
 
     pub fn for_humans<F>(&self, s: F)
@@ -46,7 +68,7 @@ impl Vessel {
     }
 
     /// Installs all transitive dependencies and returns a mapping of package name -> installation location
-    pub fn install_packages(&self) -> Result<Vec<(String, PathBuf)>> {
+    pub fn install_packages(&self) -> Result<Vec<(Name, PathBuf)>> {
         let install_plan = self
             .package_set
             .transitive_deps(self.manifest.dependencies.clone());
@@ -58,28 +80,25 @@ impl Vessel {
                 install_plan.len()
             )
         });
-        for package in &install_plan {
-            self.download_package(package)?
-        }
+
+        let paths = install_plan
+            .iter()
+            .map(|package| {
+                self.download_package(package)
+                    .map(|path| (package.name.clone(), path))
+            })
+            .collect::<Result<Vec<(String, PathBuf)>>>()?;
+
         self.for_humans(|| println!("{} Installation complete.", "[Info]".blue()));
 
-        Ok(install_plan
-            .iter()
-            .map(|p| {
-                (
-                    p.name.clone(),
-                    PathBuf::from(&format!(".vessel/{}/{}/src", p.name, p.version)),
-                )
-            })
-            .collect())
+        Ok(paths)
     }
 
     /// Downloads a package either as a tar-ball from Github or clones it as a repo
-    pub fn download_package(&self, package: &Package) -> Result<()> {
-        let package_dir = format!(".vessel/{}", package.name);
-        let package_dir = Path::new(&package_dir);
+    pub fn download_package(&self, package: &Package) -> Result<PathBuf> {
+        let package_dir = Path::new(".vessel").join(package.name.clone());
         if !package_dir.exists() {
-            fs::create_dir_all(package_dir).context(format!(
+            fs::create_dir_all(&package_dir).context(format!(
                 "Failed to create the package directory at {}",
                 package_dir.display()
             ))?;
@@ -120,7 +139,82 @@ impl Vessel {
                 package.name, package.version
             )
         }
-        Ok(())
+        Ok(repo_dir.join("src"))
+    }
+
+    /// Verifies that every source file inside the given package compiles in the current package set
+    pub fn verify_package(
+        &self,
+        moc: &PathBuf,
+        moc_args: &Option<String>,
+        name: &str,
+    ) -> Result<()> {
+        match self.package_set.find(name) {
+            None => Err(anyhow::anyhow!(
+                "The package \"{}\" does not exist in the package set",
+                name
+            )),
+            Some(package) => {
+                let mut cmd = Command::new(moc);
+                cmd.arg("--check");
+                if let Some(args) = moc_args {
+                    cmd.args(args.split(' '));
+                }
+                self.download_package(package)?;
+                let dependencies = self
+                    .package_set
+                    .transitive_deps(package.dependencies.clone());
+                for package in dependencies {
+                    let path = self.download_package(package)?;
+                    cmd.arg("--package").arg(&package.name).arg(path);
+                }
+
+                package.sources().for_each(|entry_point| {
+                    cmd.arg(entry_point);
+                });
+                let output = cmd.output()?;
+                if output.status.success() {
+                    println!("{} Verified \"{}\"", "[Info]".blue(), package.name);
+                    Ok(())
+                } else {
+                    Err(anyhow::anyhow!(
+                        "Failed to verify \"{}\" with:\n{}",
+                        package.name,
+                        String::from_utf8(output.stderr)?
+                    ))
+                }
+            }
+        }
+    }
+
+    pub fn verify_all(&self, moc: &PathBuf, moc_args: &Option<String>) -> Result<()> {
+        let mut errors: Vec<(Name, anyhow::Error)> = vec![];
+        for package in &self.package_set.topo_sorted() {
+            if errors
+                .iter()
+                .find(|(n, _)| package.dependencies.contains(n))
+                .is_none()
+            {
+                if let Err(err) = self.verify_package(moc, moc_args, &package.name) {
+                    errors.push((package.name.clone(), err))
+                }
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            let err = anyhow::anyhow!(
+                "Failed to verify: {:?}",
+                errors
+                    .iter()
+                    .map(|(n, _)| n.clone())
+                    .collect::<Vec<String>>()
+            );
+            for err in errors.iter().rev() {
+                eprintln!("{}", err.1);
+            }
+            Err(err)
+        }
     }
 }
 
@@ -227,19 +321,49 @@ pub struct Package {
     pub dependencies: Vec<Name>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+impl Package {
+    pub fn install_path(&self) -> PathBuf {
+        Path::new(".vessel")
+            .join(self.name.clone())
+            .join(self.version.clone())
+            .join("src")
+    }
+
+    /// Returns all Motoko sources found inside this package's installation directory
+    pub fn sources(&self) -> impl Iterator<Item = PathBuf> {
+        WalkDir::new(self.install_path())
+            .into_iter()
+            .filter_map(|e| match e {
+                Err(_) => None,
+                Ok(entry) => {
+                    let file_name = entry.path();
+                    if let Some(ext) = file_name.extension() {
+                        if ext == "mo" {
+                            return Some(file_name.to_owned());
+                        }
+                    }
+                    None
+                }
+            })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct PackageSet(pub Vec<Package>);
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct Manifest {
     pub dependencies: Vec<Name>,
 }
 
 impl PackageSet {
-    fn find(&self, name: &str) -> &Package {
-        self.0
-            .iter()
-            .find(|p| p.name == *name)
+    /// Finds a package by name
+    fn find(&self, name: &str) -> Option<&Package> {
+        self.0.iter().find(|p| p.name == *name)
+    }
+
+    fn find_unsafe(&self, name: &str) -> &Package {
+        self.find(name)
             .unwrap_or_else(|| panic!("Package \"{}\" wasn't specified in the package set", name))
     }
 
@@ -250,7 +374,7 @@ impl PackageSet {
         let mut todo: Vec<Name> = entry_points;
         while let Some(next) = todo.pop() {
             if !found.contains(&next) {
-                todo.append(&mut self.find(&next).dependencies.clone());
+                todo.append(&mut self.find_unsafe(&next).dependencies.clone());
                 found.insert(next);
             }
         }
@@ -259,7 +383,18 @@ impl PackageSet {
         // For now we sort them to get deterministic behaviour for testing.
         let mut found: Vec<Name> = found.into_iter().collect();
         found.sort();
-        found.iter().map(|n| self.find(n)).collect()
+        found.iter().map(|n| self.find_unsafe(n)).collect()
+    }
+
+    pub fn topo_sorted(&self) -> Vec<&Package> {
+        let mut ts = TopologicalSort::<&str>::new();
+        for package in &self.0 {
+            ts.insert(package.name.as_ref());
+            for dep in &package.dependencies {
+                ts.add_dependency(dep.as_ref(), package.name.as_ref())
+            }
+        }
+        ts.map(|name| self.find_unsafe(name)).collect()
     }
 }
 

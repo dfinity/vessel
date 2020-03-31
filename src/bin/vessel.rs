@@ -24,6 +24,18 @@ enum Command {
     /// Installs all dependencies and outputs the package flags to be passed on
     /// to the Motoko compiler tools
     Sources,
+    /// Verifies that every package in the package set builds successfully
+    Verify {
+        /// Path to the `moc` binary
+        #[structopt(long, parse(from_os_str), default_value = "moc")]
+        moc: PathBuf,
+        /// Additional arguments to pass to `moc` when checking packages
+        #[structopt(long)]
+        moc_args: Option<String>,
+        /// When specified only verified the given package name
+        #[structopt()]
+        package: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -46,6 +58,17 @@ fn main() -> Result<()> {
                 .join(" ");
             print!("{}", sources);
             Ok(())
+        }
+        Command::Verify {
+            moc,
+            moc_args,
+            package,
+        } => {
+            let vessel = vessel::Vessel::new_without_manifest(true, &opts.package_set)?;
+            match package {
+                None => vessel.verify_all(&moc, &moc_args),
+                Some(package) => vessel.verify_package(&moc, &moc_args, &package),
+            }
         }
     }
 }
