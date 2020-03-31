@@ -26,6 +26,9 @@ enum Command {
     Sources,
     /// Verifies that every package in the package set builds successfully
     Verify {
+        /// Path to the `moc` binary
+        #[structopt(long, parse(from_os_str), default_value = "moc")]
+        moc: PathBuf,
         /// Additional arguments to pass to `moc` when checking packages
         #[structopt(long)]
         moc_args: Option<String>,
@@ -56,11 +59,15 @@ fn main() -> Result<()> {
             print!("{}", sources);
             Ok(())
         }
-        Command::Verify { moc_args, package } => {
+        Command::Verify {
+            moc,
+            moc_args,
+            package,
+        } => {
             let vessel = vessel::Vessel::new_without_manifest(true, &opts.package_set)?;
             match package {
-                None => vessel.verify_all(&moc_args),
-                Some(package) => vessel.verify_package(&moc_args, &package),
+                None => vessel.verify_all(&moc, &moc_args),
+                Some(package) => vessel.verify_package(&moc, &moc_args, &package),
             }
         }
     }
