@@ -1178,7 +1178,7 @@ checksum = "078775d0255232fb988e6fccf26ddc9d1ac274299aaedcedce21c6f72cc533ce"
 
 [[package]]
 name = "vessel"
-version = "0.3.1-alpha.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "colored",
