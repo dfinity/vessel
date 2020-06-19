@@ -2,7 +2,6 @@ use anyhow::{self, Context, Result};
 use colored::*;
 use flate2::read::GzDecoder;
 use log::debug;
-use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, File};
