@@ -105,6 +105,10 @@ impl Vessel {
         }
         let repo_dir = package_dir.join(&package.version);
         if !repo_dir.exists() {
+            let tmp = Path::new(".vessel").join(".tmp");
+            if !tmp.exists() {
+                fs::create_dir_all(&tmp)?
+            }
             if package.repo.starts_with("https://github.com") {
                 self.for_humans(|| {
                     println!(
@@ -113,16 +117,18 @@ impl Vessel {
                         package.name
                     )
                 });
-                download_tar_ball(&repo_dir, &package.repo, &package.version).or_else(|_| {
-                    self.for_humans(|| {
-                        println!(
+                download_tar_ball(&tmp, &repo_dir, &package.repo, &package.version).or_else(
+                    |_| {
+                        self.for_humans(|| {
+                            println!(
                             "{} Downloading tar-ball failed, cloning as git repo instead: \"{}\"",
                             "[Warn]".yellow(),
                             package.name
                         )
-                    });
-                    clone_package(&repo_dir, &package.repo, &package.version)
-                })?
+                        });
+                        clone_package(&tmp, &repo_dir, &package.repo, &package.version)
+                    },
+                )?
             } else {
                 self.for_humans(|| {
                     println!(
@@ -131,7 +137,7 @@ impl Vessel {
                         package.name
                     )
                 });
-                clone_package(&repo_dir, &package.repo, &package.version)?
+                clone_package(&tmp, &repo_dir, &package.repo, &package.version)?
             }
         } else {
             debug!(
@@ -219,7 +225,7 @@ impl Vessel {
 }
 
 /// Downloads and unpacks a tar-ball from Github into the `dest` path
-fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
+fn download_tar_ball(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<()> {
     let target = format!(
         "{}/archive/{}/.tar.gz",
         repo.trim_end_matches(".git"),
@@ -229,7 +235,7 @@ fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
 
     // We unpack into a temporary directory and rename it in one go once
     // the full unpacking was successful
-    let tmp_dir: TempDir = tempfile::tempdir()?;
+    let tmp_dir: TempDir = tempfile::tempdir_in(tmp)?;
     Archive::new(GzDecoder::new(response)).unpack(tmp_dir.path())?;
 
     // We expect an unpacked repo to contain exactly one directory
@@ -247,8 +253,8 @@ fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
 }
 
 /// Clones `repo` into `dest` and checks out `version`
-fn clone_package(dest: &Path, repo: &str, version: &str) -> Result<()> {
-    let tmp_dir: TempDir = tempfile::tempdir()?;
+fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<()> {
+    let tmp_dir: TempDir = tempfile::tempdir_in(tmp)?;
     Command::new("git")
         .args(&["clone", repo, "repo"])
         .current_dir(tmp_dir.path())
