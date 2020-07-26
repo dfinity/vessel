@@ -41,11 +41,8 @@ impl Vessel {
     }
 
     fn read_package_set(&mut self, package_set_file: &PathBuf) -> Result<()> {
-        let package_set_file = File::open(package_set_file).context(format!(
-            "Failed to open the package set file at \"{}\"",
-            package_set_file.display()
-        ))?;
-        self.package_set = serde_json::from_reader(package_set_file)
+        self.package_set = serde_dhall::from_file(package_set_file)
+            .parse()
             .context("Failed to parse the package set file")?;
         Ok(())
     }
@@ -312,6 +309,7 @@ impl Package {
     }
 }
 
+#[serde(transparent)]
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct PackageSet(pub Vec<Package>);
 

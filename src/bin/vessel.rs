@@ -9,7 +9,7 @@ use structopt::StructOpt;
 #[structopt(about = "Simple package management for Motoko")]
 struct Opts {
     /// Which file to read the package set from
-    #[structopt(long, parse(from_os_str), default_value = "package-set.json")]
+    #[structopt(long, parse(from_os_str), default_value = "package-set.dhall")]
     package_set: PathBuf,
     #[structopt(subcommand)]
     command: Command,
