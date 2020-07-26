@@ -33,10 +33,10 @@ impl Vessel {
     }
 
     fn read_manifest_file(&mut self) -> Result<()> {
-        let manifest_file =
-            File::open("vessel.json").context("Failed to open the vessel.json file")?;
-        self.manifest = serde_json::from_reader(manifest_file)
-            .context("Failed to parse the vessel.json file")?;
+        let manifest_file = PathBuf::from("vessel.dhall");
+        self.manifest = serde_dhall::from_file(manifest_file)
+            .parse()
+            .context("Failed to parse the vessel.dhall file")?;
         Ok(())
     }
 
