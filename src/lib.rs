@@ -3,7 +3,7 @@ use flate2::read::GzDecoder;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::fs::{self, File};
+use std::fs;
 use std::iter::Iterator;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -230,43 +230,23 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
     Ok(())
 }
 
-/// Initializes a new vessel project by creating a `vessel.json` file with no
+/// TODO: Initializes a new vessel project by creating a `vessel.dhall` file with no
 /// dependencies and adding a dummy package set (for now, we should pull this
 /// from a community maintained repository instead)
 pub fn init() -> Result<()> {
-    let package_set_path: PathBuf = PathBuf::from("package-set.json");
-    let manifest_path: PathBuf = PathBuf::from("vessel.json");
+    let package_set_path: PathBuf = PathBuf::from("package-set.dhall");
+    let manifest_path: PathBuf = PathBuf::from("vessel.dhall");
     if package_set_path.exists() {
         return Err(anyhow::anyhow!(
-            "Failed to initialize, there is an existing package-set.json file here"
+            "Failed to initialize, there is an existing package-set.dhall file here"
         ));
     }
     if manifest_path.exists() {
         return Err(anyhow::anyhow!(
-            "Failed to initialize, there is an existing vessel.json file here"
+            "Failed to initialize, there is an existing vessel.dhall file here"
         ));
     }
-    let initial_package_set: PackageSet = PackageSet(vec![{
-        Package {
-            name: "leftpad".to_string(),
-            repo: "https://github.com/kritzcreek/mo-leftpad.git".to_string(),
-            version: "v1.0.0".to_string(),
-            dependencies: vec![],
-        }
-    }]);
-    let initial_manifest: Manifest = Manifest {
-        dependencies: vec![],
-    };
-    let mut package_set_file =
-        File::create(package_set_path).context("Failed to create the package-set.json file")?;
-    serde_json::to_writer_pretty(&mut package_set_file, &initial_package_set)
-        .context("Failed to create the package-set.json file")?;
-
-    let mut manifest_file =
-        File::create(manifest_path).context("Failed to create the vessel.json file")?;
-    serde_json::to_writer_pretty(&mut manifest_file, &initial_manifest)
-        .context("Failed to create the vessel.json file")?;
-
+    // "TODO: Implement creation of the dhall files
     Ok(())
 }
 
