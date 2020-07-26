@@ -2,7 +2,7 @@ use anyhow::{self, Context, Result};
 use flate2::read::GzDecoder;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::fs;
 use std::iter::Iterator;
 use std::path::{Path, PathBuf};
@@ -261,6 +261,12 @@ pub struct Package {
     pub version: Tag,
     pub dependencies: Vec<Name>,
 }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PackageInfo {
+    pub repo: Url,
+    pub version: Tag,
+    pub dependencies: Vec<Name>,
+}
 
 impl Package {
     pub fn install_path(&self) -> PathBuf {
@@ -289,13 +295,29 @@ impl Package {
     }
 }
 
-#[serde(transparent)]
+#[serde(from = "NewPackageSet")]
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct PackageSet(pub Vec<Package>);
+
+#[serde(transparent)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct NewPackageSet(pub HashMap<Name, PackageInfo>);
 
 #[derive(Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct Manifest {
     pub dependencies: Vec<Name>,
+}
+
+impl From<NewPackageSet> for PackageSet {
+    fn from(package_set: NewPackageSet) -> PackageSet {
+        let packages = package_set.0.into_iter().map(|(name, info)| Package {
+            name,
+            repo: info.repo,
+            version: info.version,
+            dependencies: info.dependencies,
+        }).collect();
+        PackageSet(packages)
+    }
 }
 
 impl PackageSet {
