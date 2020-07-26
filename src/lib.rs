@@ -1,7 +1,6 @@
 use anyhow::{self, Context, Result};
-use colored::*;
 use flate2::read::GzDecoder;
-use log::debug;
+use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::{self, File};
@@ -15,26 +14,20 @@ use walkdir::WalkDir;
 
 #[derive(Debug, Default)]
 pub struct Vessel {
-    pub output_for_humans: bool,
     pub package_set: PackageSet,
     pub manifest: Manifest,
 }
 
 impl Vessel {
-    pub fn new(output_for_humans: bool, package_set_file: &PathBuf) -> Result<Vessel> {
+    pub fn new(package_set_file: &PathBuf) -> Result<Vessel> {
         let mut new_vessel: Vessel = Default::default();
-        new_vessel.output_for_humans = output_for_humans;
         new_vessel.read_package_set(package_set_file)?;
         new_vessel.read_manifest_file()?;
         Ok(new_vessel)
     }
 
-    pub fn new_without_manifest(
-        output_for_humans: bool,
-        package_set_file: &PathBuf,
-    ) -> Result<Vessel> {
+    pub fn new_without_manifest(package_set_file: &PathBuf) -> Result<Vessel> {
         let mut new_vessel: Vessel = Default::default();
-        new_vessel.output_for_humans = output_for_humans;
         new_vessel.read_package_set(package_set_file)?;
         Ok(new_vessel)
     }
@@ -57,94 +50,22 @@ impl Vessel {
         Ok(())
     }
 
-    pub fn for_humans<F>(&self, s: F)
-    where
-        F: FnOnce(),
-    {
-        if self.output_for_humans {
-            s()
-        }
-    }
-
     /// Installs all transitive dependencies and returns a mapping of package name -> installation location
     pub fn install_packages(&self) -> Result<Vec<(Name, PathBuf)>> {
         let install_plan = self
             .package_set
             .transitive_deps(self.manifest.dependencies.clone());
 
-        self.for_humans(|| {
-            println!(
-                "{} Installing {} packages",
-                "[Info]".blue(),
-                install_plan.len()
-            )
-        });
+        info!("Installing {} packages", install_plan.len());
 
         let paths = install_plan
             .iter()
-            .map(|package| {
-                self.download_package(package)
-                    .map(|path| (package.name.clone(), path))
-            })
+            .map(|package| download_package(package).map(|path| (package.name.clone(), path)))
             .collect::<Result<Vec<(String, PathBuf)>>>()?;
 
-        self.for_humans(|| println!("{} Installation complete.", "[Info]".blue()));
+        info!("Installation complete.");
 
         Ok(paths)
-    }
-
-    /// Downloads a package either as a tar-ball from Github or clones it as a repo
-    pub fn download_package(&self, package: &Package) -> Result<PathBuf> {
-        let package_dir = Path::new(".vessel").join(package.name.clone());
-        if !package_dir.exists() {
-            fs::create_dir_all(&package_dir).context(format!(
-                "Failed to create the package directory at {}",
-                package_dir.display()
-            ))?;
-        }
-        let repo_dir = package_dir.join(&package.version);
-        if !repo_dir.exists() {
-            let tmp = Path::new(".vessel").join(".tmp");
-            if !tmp.exists() {
-                fs::create_dir_all(&tmp)?
-            }
-            if package.repo.starts_with("https://github.com") {
-                self.for_humans(|| {
-                    println!(
-                        "{} Downloading tar-ball: \"{}\"",
-                        "[Info]".blue(),
-                        package.name
-                    )
-                });
-                download_tar_ball(&tmp, &repo_dir, &package.repo, &package.version).or_else(
-                    |_| {
-                        self.for_humans(|| {
-                            println!(
-                            "{} Downloading tar-ball failed, cloning as git repo instead: \"{}\"",
-                            "[Warn]".yellow(),
-                            package.name
-                        )
-                        });
-                        clone_package(&tmp, &repo_dir, &package.repo, &package.version)
-                    },
-                )?
-            } else {
-                self.for_humans(|| {
-                    println!(
-                        "{} Cloning git repository: \"{}\"",
-                        "[Info]".blue(),
-                        package.name
-                    )
-                });
-                clone_package(&tmp, &repo_dir, &package.repo, &package.version)?
-            }
-        } else {
-            debug!(
-                "{} at version {} has already been downloaded",
-                package.name, package.version
-            )
-        }
-        Ok(repo_dir.join("src"))
     }
 
     /// Verifies that every source file inside the given package compiles in the current package set
@@ -165,12 +86,12 @@ impl Vessel {
                 if let Some(args) = moc_args {
                     cmd.args(args.split(' '));
                 }
-                self.download_package(package)?;
+                download_package(&package)?;
                 let dependencies = self
                     .package_set
                     .transitive_deps(package.dependencies.clone());
                 for package in dependencies {
-                    let path = self.download_package(package)?;
+                    let path = download_package(&package)?;
                     cmd.arg("--package").arg(&package.name).arg(path);
                 }
 
@@ -179,7 +100,7 @@ impl Vessel {
                 });
                 let output = cmd.output()?;
                 if output.status.success() {
-                    println!("{} Verified \"{}\"", "[Info]".blue(), package.name);
+                    info!("Verified \"{}\"", package.name);
                     Ok(())
                 } else {
                     Err(anyhow::anyhow!(
@@ -223,6 +144,43 @@ impl Vessel {
     }
 }
 
+/// Downloads a package either as a tar-ball from Github or clones it as a repo
+pub fn download_package(package: &Package) -> Result<PathBuf> {
+    let package_dir = Path::new(".vessel").join(package.name.clone());
+    if !package_dir.exists() {
+        fs::create_dir_all(&package_dir).context(format!(
+            "Failed to create the package directory at {}",
+            package_dir.display()
+        ))?;
+    }
+    let repo_dir = package_dir.join(&package.version);
+    if !repo_dir.exists() {
+        let tmp = Path::new(".vessel").join(".tmp");
+        if !tmp.exists() {
+            fs::create_dir_all(&tmp)?
+        }
+        if package.repo.starts_with("https://github.com") {
+            info!("Downloading tar-ball: \"{}\"", package.name);
+            download_tar_ball(&tmp, &repo_dir, &package.repo, &package.version).or_else(|_| {
+                warn!(
+                    "Downloading tar-ball failed, cloning as git repo instead: \"{}\"",
+                    package.name
+                );
+                clone_package(&tmp, &repo_dir, &package.repo, &package.version)
+            })?
+        } else {
+            info!("Cloning git repository: \"{}\"", package.name);
+            clone_package(&tmp, &repo_dir, &package.repo, &package.version)?
+        }
+    } else {
+        debug!(
+            "{} at version {} has already been downloaded",
+            package.name, package.version
+        )
+    }
+    Ok(repo_dir.join("src"))
+}
+
 /// Downloads and unpacks a tar-ball from Github into the `dest` path
 fn download_tar_ball(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<()> {
     let target = format!(
@@ -260,6 +218,7 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
         .output()
         .context(format!("Failed to clone the repo at {}", repo))?;
     let repo_dir = tmp_dir.path().join("repo");
+    // TODO: fail when checkout fails (status code != 0)
     Command::new("git")
         .args(&["-c", "advice.detachedHead=false", "checkout", version])
         .current_dir(&repo_dir)

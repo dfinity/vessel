@@ -1,4 +1,7 @@
 use anyhow::Result;
+use fern::colors::ColoredLevelConfig;
+use fern::Output;
+use log::LevelFilter;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -35,18 +38,39 @@ enum Command {
     },
 }
 
+fn setup_logger(opts: &Opts) -> Result<(), fern::InitError> {
+    let (log_level, out_channel): (LevelFilter, Output) = match opts.command {
+        Command::Sources => (log::LevelFilter::Error, std::io::stderr().into()),
+        _ => (log::LevelFilter::Info, std::io::stdout().into()),
+    };
+    let colors = ColoredLevelConfig::new();
+    fern::Dispatch::new()
+        .format(move |out, message, record| {
+            out.finish(format_args!(
+                "[{}] {}",
+                colors.color(record.level()),
+                message
+            ))
+        })
+        .level(log_level)
+        .chain(out_channel)
+        .apply()?;
+    Ok(())
+}
+
 fn main() -> Result<()> {
-    pretty_env_logger::init();
     let opts = Opts::from_args();
+    setup_logger(&opts)?;
+
     match opts.command {
         Command::Init => vessel::init(),
         Command::Install => {
-            let vessel = vessel::Vessel::new(true, &opts.package_set)?;
+            let vessel = vessel::Vessel::new(&opts.package_set)?;
             let _ = vessel.install_packages()?;
             Ok(())
         }
         Command::Sources => {
-            let vessel = vessel::Vessel::new(false, &opts.package_set)?;
+            let vessel = vessel::Vessel::new(&opts.package_set)?;
             let sources = vessel
                 .install_packages()?
                 .into_iter()
@@ -61,7 +85,7 @@ fn main() -> Result<()> {
             moc_args,
             package,
         } => {
-            let vessel = vessel::Vessel::new_without_manifest(true, &opts.package_set)?;
+            let vessel = vessel::Vessel::new_without_manifest(&opts.package_set)?;
             match package {
                 None => vessel.verify_all(&moc, &moc_args),
                 Some(package) => vessel.verify_package(&moc, &moc_args, &package),
