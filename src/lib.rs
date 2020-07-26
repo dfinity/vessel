@@ -2,7 +2,7 @@ use anyhow::{self, Context, Result};
 use flate2::read::GzDecoder;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::iter::Iterator;
 use std::path::{Path, PathBuf};
@@ -310,12 +310,16 @@ pub struct Manifest {
 
 impl From<NewPackageSet> for PackageSet {
     fn from(package_set: NewPackageSet) -> PackageSet {
-        let packages = package_set.0.into_iter().map(|(name, info)| Package {
-            name,
-            repo: info.repo,
-            version: info.version,
-            dependencies: info.dependencies,
-        }).collect();
+        let packages = package_set
+            .0
+            .into_iter()
+            .map(|(name, info)| Package {
+                name,
+                repo: info.repo,
+                version: info.version,
+                dependencies: info.dependencies,
+            })
+            .collect();
         PackageSet(packages)
     }
 }
