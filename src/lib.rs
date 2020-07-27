@@ -2,7 +2,7 @@ use anyhow::{self, Context, Result};
 use flate2::read::GzDecoder;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::iter::Iterator;
 use std::path::{Path, PathBuf};
@@ -42,7 +42,7 @@ impl Vessel {
     }
 
     fn read_package_set(&mut self, package_set_file: &PathBuf) -> Result<()> {
-        self.package_set = PackageSet(
+        self.package_set = PackageSet::new(
             serde_dhall::from_file(package_set_file)
                 .static_type_annotation()
                 .parse()
@@ -299,8 +299,10 @@ impl Package {
     }
 }
 
+// This isn't normalized, as the package name is duplicated, but it's too handy
+// to have a `Package` carry its name along.
 #[derive(Debug, Clone, PartialEq, Default)]
-pub struct PackageSet(pub Vec<Package>);
+pub struct PackageSet(pub HashMap<Name, Package>);
 
 #[derive(Debug, PartialEq, Default, Serialize, Deserialize, serde_dhall::StaticType)]
 pub struct Manifest {
@@ -308,9 +310,17 @@ pub struct Manifest {
 }
 
 impl PackageSet {
+    fn new(packages: Vec<Package>) -> PackageSet {
+        let mut package_set = HashMap::new();
+        for package in packages {
+            package_set.insert(package.name.clone(), package);
+        }
+        PackageSet(package_set)
+    }
+
     /// Finds a package by name
     fn find(&self, name: &str) -> Option<&Package> {
-        self.0.iter().find(|p| p.name == *name)
+        self.0.get(name)
     }
 
     fn find_unsafe(&self, name: &str) -> &Package {
@@ -339,10 +349,10 @@ impl PackageSet {
 
     pub fn topo_sorted(&self) -> Vec<&Package> {
         let mut ts = TopologicalSort::<&str>::new();
-        for package in &self.0 {
-            ts.insert(package.name.as_ref());
+        for (name, package) in &self.0 {
+            ts.insert(name.as_ref());
             for dep in &package.dependencies {
-                ts.add_dependency(dep.as_ref(), package.name.as_ref())
+                ts.add_dependency(dep.as_ref(), name.as_ref())
             }
         }
         ts.map(|name| self.find_unsafe(name)).collect()
