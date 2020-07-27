@@ -1,0 +1,40 @@
+{
+    "easy-dhall-nix": {
+        "branch": "master",
+        "description": "Derivations for easily downloading Dhall binaries and putting them to use.",
+        "homepage": "",
+        "owner": "justinwoo",
+        "repo": "easy-dhall-nix",
+        "rev": "7c22a145fcb8e00b61d29efc7543af0c80d709ed",
+        "sha256": "03qry1wbhyb8i2qz7gcb04hw5d75a4vx2d4xjb6iradj1pc199xg",
+        "type": "tarball",
+        "url": "https://github.com/justinwoo/easy-dhall-nix/archive/7c22a145fcb8e00b61d29efc7543af0c80d709ed.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "naersk": {
+        "branch": "master",
+        "builtin": false,
+        "description": "Build rust crates in Nix. No configuration, no code generation, no IFD. Sandbox friendly.",
+        "homepage": "",
+        "owner": "nmattia",
+        "repo": "naersk",
+        "rev": "a82fd7dc31a58c462b6dfa9d9d886fa2cc75dfd4",
+        "sha256": "00bjwir52y6jbf0b22qy9qxramw35k5fc7kp9hymr1zgpmw9kbwg",
+        "type": "tarball",
+        "url": "https://github.com/nmattia/naersk/archive/a82fd7dc31a58c462b6dfa9d9d886fa2cc75dfd4.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "nixpkgs": {
+        "branch": "master",
+        "builtin": true,
+        "description": "Nixpkgs/NixOS branches that track the Nixpkgs/NixOS channels",
+        "homepage": null,
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "7bf0f7301a3fdd8478e8abe81df96fbbff5fb9e7",
+        "sha256": "0hw8hdj0a6xs4fza9mfbwzmxaa5x4ynp57y52sy5x1cps674ck3j",
+        "type": "tarball",
+        "url": "https://github.com/NixOS/nixpkgs/archive/7bf0f7301a3fdd8478e8abe81df96fbbff5fb9e7.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    }
+}
