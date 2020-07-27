@@ -376,7 +376,7 @@ mod test {
     fn it_finds_a_transitive_dependency() {
         let a = mk_package("A", vec!["B"]);
         let b = mk_package("B", vec![]);
-        let ps = PackageSet(vec![a.clone(), b.clone()]);
+        let ps = PackageSet::new(vec![a.clone(), b.clone()]);
         assert_eq!(vec![&b], ps.transitive_deps(vec!["B".to_string()]));
         assert_eq!(vec![&a, &b], ps.transitive_deps(vec!["A".to_string()]))
     }
@@ -386,7 +386,7 @@ mod test {
         let a = mk_package("A", vec!["B"]);
         let b = mk_package("B", vec![]);
         let c = mk_package("C", vec!["B"]);
-        let ps = PackageSet(vec![a.clone(), b.clone(), c.clone()]);
+        let ps = PackageSet::new(vec![a.clone(), b.clone(), c.clone()]);
         assert_eq!(
             vec![&a, &b, &c],
             ps.transitive_deps(vec!["A".to_string(), "C".to_string()])
