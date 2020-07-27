@@ -2,7 +2,7 @@ use anyhow::{self, Context, Result};
 use flate2::read::GzDecoder;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::iter::Iterator;
 use std::path::{Path, PathBuf};
@@ -35,15 +35,19 @@ impl Vessel {
     fn read_manifest_file(&mut self) -> Result<()> {
         let manifest_file = PathBuf::from("vessel.dhall");
         self.manifest = serde_dhall::from_file(manifest_file)
+            .static_type_annotation()
             .parse()
             .context("Failed to parse the vessel.dhall file")?;
         Ok(())
     }
 
     fn read_package_set(&mut self, package_set_file: &PathBuf) -> Result<()> {
-        self.package_set = serde_dhall::from_file(package_set_file)
-            .parse()
-            .context("Failed to parse the package set file")?;
+        self.package_set = PackageSet(
+            serde_dhall::from_file(package_set_file)
+                .static_type_annotation()
+                .parse()
+                .context("Failed to parse the package set file")?,
+        );
         Ok(())
     }
 
@@ -254,7 +258,7 @@ pub type Url = String;
 pub type Tag = String;
 pub type Name = String;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, serde_dhall::StaticType)]
 pub struct Package {
     pub name: Name,
     pub repo: Url,
@@ -295,33 +299,12 @@ impl Package {
     }
 }
 
-#[serde(from = "NewPackageSet")]
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct PackageSet(pub Vec<Package>);
 
-#[serde(transparent)]
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct NewPackageSet(pub HashMap<Name, PackageInfo>);
-
-#[derive(Debug, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Default, Serialize, Deserialize, serde_dhall::StaticType)]
 pub struct Manifest {
     pub dependencies: Vec<Name>,
-}
-
-impl From<NewPackageSet> for PackageSet {
-    fn from(package_set: NewPackageSet) -> PackageSet {
-        let packages = package_set
-            .0
-            .into_iter()
-            .map(|(name, info)| Package {
-                name,
-                repo: info.repo,
-                version: info.version,
-                dependencies: info.dependencies,
-            })
-            .collect();
-        PackageSet(packages)
-    }
 }
 
 impl PackageSet {
