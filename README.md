@@ -62,15 +62,16 @@ reset your caches and re-install.
 ### How do I add a local package to my package set?
 
 Make sure your local package is a git repository, then add an entry like so to
-your package set:
+your `additions` in the `package-set.dhall` file:
 
 ```dhall
-{
-  name = "mypackage",
-  repo = "file:///home/path/to/mypackage",
-  version = "v1.0.0",
-  dependencies = ["base"]
-}
+let additions = [
+   { name = "mypackage"
+   , repo = "file:///home/path/to/mypackage"
+   , version = "v1.0.0"
+   , dependencies = ["base"]
+   }
+]
 ```
 
 Now you can depend on this package by adding `mypackage` to your `vessel.dhall` file.
