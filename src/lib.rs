@@ -253,8 +253,10 @@ pub fn init() -> Result<()> {
     }
     // "TODO: Implement creation of the dhall files
     let mut manifest = fs::File::create("vessel.dhall")?;
-    manifest.write_all(br#"{ dependencies = [ "base", "matchers" ] }
-"#)?;
+    manifest.write_all(
+        br#"{ dependencies = [ "base", "matchers" ] }
+"#,
+    )?;
     let mut manifest = fs::File::create("package-set.dhall")?;
     // TODO: Fetch this upstream URL to point to the available version
     manifest.write_all(br#"let upstream =
