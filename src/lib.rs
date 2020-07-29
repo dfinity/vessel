@@ -265,12 +265,6 @@ pub struct Package {
     pub version: Tag,
     pub dependencies: Vec<Name>,
 }
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PackageInfo {
-    pub repo: Url,
-    pub version: Tag,
-    pub dependencies: Vec<Name>,
-}
 
 impl Package {
     pub fn install_path(&self) -> PathBuf {
