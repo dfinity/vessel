@@ -100,7 +100,7 @@ impl Vessel {
                 package.sources().for_each(|entry_point| {
                     cmd.arg(entry_point);
                 });
-                let output = cmd.output()?;
+                let output = cmd.output().context(format!("Failed to run {:?}", cmd))?;
                 if output.status.success() {
                     info!("Verified \"{}\"", package.name);
                     Ok(())
@@ -235,9 +235,8 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
     Ok(())
 }
 
-/// TODO: Initializes a new vessel project by creating a `vessel.dhall` file with no
-/// dependencies and adding a dummy package set (for now, we should pull this
-/// from a community maintained repository instead)
+/// Initializes a new vessel project by creating a `vessel.dhall` file with no
+/// dependencies and adding a small package set referencing vessel-package-set
 pub fn init() -> Result<()> {
     let package_set_path: PathBuf = PathBuf::from("package-set.dhall");
     let manifest_path: PathBuf = PathBuf::from("vessel.dhall");
@@ -251,7 +250,6 @@ pub fn init() -> Result<()> {
             "Failed to initialize, there is an existing vessel.dhall file here"
         ));
     }
-    // "TODO: Implement creation of the dhall files
     let mut manifest = fs::File::create("vessel.dhall")?;
     manifest.write_all(
         br#"{ dependencies = [ "base", "matchers" ] }
