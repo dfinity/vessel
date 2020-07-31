@@ -2,8 +2,9 @@ use anyhow::{self, Context, Result};
 use flate2::read::GzDecoder;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::fs::{self, File};
+use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::io::Write;
 use std::iter::Iterator;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -33,20 +34,21 @@ impl Vessel {
     }
 
     fn read_manifest_file(&mut self) -> Result<()> {
-        let manifest_file =
-            File::open("vessel.json").context("Failed to open the vessel.json file")?;
-        self.manifest = serde_json::from_reader(manifest_file)
-            .context("Failed to parse the vessel.json file")?;
+        let manifest_file = PathBuf::from("vessel.dhall");
+        self.manifest = serde_dhall::from_file(manifest_file)
+            .static_type_annotation()
+            .parse()
+            .context("Failed to parse the vessel.dhall file")?;
         Ok(())
     }
 
     fn read_package_set(&mut self, package_set_file: &PathBuf) -> Result<()> {
-        let package_set_file = File::open(package_set_file).context(format!(
-            "Failed to open the package set file at \"{}\"",
-            package_set_file.display()
-        ))?;
-        self.package_set = serde_json::from_reader(package_set_file)
-            .context("Failed to parse the package set file")?;
+        self.package_set = PackageSet::new(
+            serde_dhall::from_file(package_set_file)
+                .static_type_annotation()
+                .parse()
+                .context("Failed to parse the package set file")?,
+        );
         Ok(())
     }
 
@@ -98,7 +100,7 @@ impl Vessel {
                 package.sources().for_each(|entry_point| {
                     cmd.arg(entry_point);
                 });
-                let output = cmd.output()?;
+                let output = cmd.output().context(format!("Failed to run {:?}", cmd))?;
                 if output.status.success() {
                     info!("Verified \"{}\"", package.name);
                     Ok(())
@@ -233,43 +235,56 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
     Ok(())
 }
 
-/// Initializes a new vessel project by creating a `vessel.json` file with no
-/// dependencies and adding a dummy package set (for now, we should pull this
-/// from a community maintained repository instead)
+/// Initializes a new vessel project by creating a `vessel.dhall` file with no
+/// dependencies and adding a small package set referencing vessel-package-set
 pub fn init() -> Result<()> {
-    let package_set_path: PathBuf = PathBuf::from("package-set.json");
-    let manifest_path: PathBuf = PathBuf::from("vessel.json");
+    let package_set_path: PathBuf = PathBuf::from("package-set.dhall");
+    let manifest_path: PathBuf = PathBuf::from("vessel.dhall");
     if package_set_path.exists() {
         return Err(anyhow::anyhow!(
-            "Failed to initialize, there is an existing package-set.json file here"
+            "Failed to initialize, there is an existing package-set.dhall file here"
         ));
     }
     if manifest_path.exists() {
         return Err(anyhow::anyhow!(
-            "Failed to initialize, there is an existing vessel.json file here"
+            "Failed to initialize, there is an existing vessel.dhall file here"
         ));
     }
-    let initial_package_set: PackageSet = PackageSet(vec![{
-        Package {
-            name: "leftpad".to_string(),
-            repo: "https://github.com/kritzcreek/mo-leftpad.git".to_string(),
-            version: "v1.0.0".to_string(),
-            dependencies: vec![],
-        }
-    }]);
-    let initial_manifest: Manifest = Manifest {
-        dependencies: vec![],
-    };
-    let mut package_set_file =
-        File::create(package_set_path).context("Failed to create the package-set.json file")?;
-    serde_json::to_writer_pretty(&mut package_set_file, &initial_package_set)
-        .context("Failed to create the package-set.json file")?;
+    let mut manifest = fs::File::create("vessel.dhall")?;
+    manifest.write_all(
+        br#"{ dependencies = [ "base", "matchers" ] }
+"#,
+    )?;
+    let mut manifest = fs::File::create("package-set.dhall")?;
+    // TODO: Fetch this upstream URL to point to the available version
+    manifest.write_all(br#"let upstream =
+    https://raw.githubusercontent.com/kritzcreek/vessel-package-set/b8a50b772af45877ed1d7fae929c415820790b01/src/packages.dhall sha256:2ba38db2e5454a25e91841ba93e8f7bdb4b73fd59e0e6e2f3d8550d61fa63b1c
 
-    let mut manifest_file =
-        File::create(manifest_path).context("Failed to create the vessel.json file")?;
-    serde_json::to_writer_pretty(&mut manifest_file, &initial_manifest)
-        .context("Failed to create the vessel.json file")?;
+let Package =
+    { name : Text, version : Text, repo : Text, dependencies : List Text }
 
+let
+  -- This is where you can add your own packages to the package-set
+  additions =
+    [] : List Package
+
+let
+  {- This is where you can override existing packages in the package-set
+
+     For example, if you wanted to use version `v2.0.0` of the foo library:
+     let overrides = [
+         { name = "foo"
+         , version = "v2.0.0"
+         , repo = "https://github.com/bar/foo"
+         , dependencies = [] : List Text
+         }
+     ]
+  -}
+  overrides =
+    [] : List Package
+
+in  upstream # additions # overrides
+"#)?;
     Ok(())
 }
 
@@ -277,7 +292,7 @@ pub type Url = String;
 pub type Tag = String;
 pub type Name = String;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, serde_dhall::StaticType)]
 pub struct Package {
     pub name: Name,
     pub repo: Url,
@@ -312,18 +327,28 @@ impl Package {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-pub struct PackageSet(pub Vec<Package>);
+// This isn't normalized, as the package name is duplicated, but it's too handy
+// to have a `Package` carry its name along.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PackageSet(pub HashMap<Name, Package>);
 
-#[derive(Debug, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Default, Serialize, Deserialize, serde_dhall::StaticType)]
 pub struct Manifest {
     pub dependencies: Vec<Name>,
 }
 
 impl PackageSet {
+    fn new(packages: Vec<Package>) -> PackageSet {
+        let mut package_set = HashMap::new();
+        for package in packages {
+            package_set.insert(package.name.clone(), package);
+        }
+        PackageSet(package_set)
+    }
+
     /// Finds a package by name
     fn find(&self, name: &str) -> Option<&Package> {
-        self.0.iter().find(|p| p.name == *name)
+        self.0.get(name)
     }
 
     fn find_unsafe(&self, name: &str) -> &Package {
@@ -352,10 +377,10 @@ impl PackageSet {
 
     pub fn topo_sorted(&self) -> Vec<&Package> {
         let mut ts = TopologicalSort::<&str>::new();
-        for package in &self.0 {
-            ts.insert(package.name.as_ref());
+        for (name, package) in &self.0 {
+            ts.insert(name.as_ref());
             for dep in &package.dependencies {
-                ts.add_dependency(dep.as_ref(), package.name.as_ref())
+                ts.add_dependency(dep.as_ref(), name.as_ref())
             }
         }
         ts.map(|name| self.find_unsafe(name)).collect()
@@ -379,7 +404,7 @@ mod test {
     fn it_finds_a_transitive_dependency() {
         let a = mk_package("A", vec!["B"]);
         let b = mk_package("B", vec![]);
-        let ps = PackageSet(vec![a.clone(), b.clone()]);
+        let ps = PackageSet::new(vec![a.clone(), b.clone()]);
         assert_eq!(vec![&b], ps.transitive_deps(vec!["B".to_string()]));
         assert_eq!(vec![&a, &b], ps.transitive_deps(vec!["A".to_string()]))
     }
@@ -389,7 +414,7 @@ mod test {
         let a = mk_package("A", vec!["B"]);
         let b = mk_package("B", vec![]);
         let c = mk_package("C", vec!["B"]);
-        let ps = PackageSet(vec![a.clone(), b.clone(), c.clone()]);
+        let ps = PackageSet::new(vec![a.clone(), b.clone(), c.clone()]);
         assert_eq!(
             vec![&a, &b, &c],
             ps.transitive_deps(vec!["A".to_string(), "C".to_string()])
