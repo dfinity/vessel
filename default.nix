@@ -19,7 +19,7 @@ let vessel = nixpkgs.rustPlatform.buildRustPackage rec {
 
   src = subpath ./.;
 
-  cargoSha256 = "16q9i5cjkcd1gwy7ac12zvdjmfcw4na0fmillxpzkmjsp4iw25pb";
+  cargoSha256 = "0kykwbqhh4zm4si0ibr89m3vas7ldpg90r8kjfv0qn5mr22zw48c";
   verifyCargoDeps = true;
 }; in
 
