@@ -214,14 +214,17 @@ fn download_tar_ball(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Resu
 /// Clones `repo` into `dest` and checks out `version`
 fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<()> {
     let tmp_dir: TempDir = tempfile::tempdir_in(tmp)?;
-    Command::new("git")
+    let clone_result = Command::new("git")
         .args(&["clone", repo, "repo"])
         .current_dir(tmp_dir.path())
         .output()
         .context(format!("Failed to clone the repo at {}", repo))?;
+    if !clone_result.status.success() {
+        return Err(anyhow::anyhow!("Failed to clone the repo at: {}", repo));
+    }
+
     let repo_dir = tmp_dir.path().join("repo");
-    // TODO: fail when checkout fails (status code != 0)
-    Command::new("git")
+    let checkout_result = Command::new("git")
         .args(&["-c", "advice.detachedHead=false", "checkout", version])
         .current_dir(&repo_dir)
         .output()
@@ -231,6 +234,14 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
             repo,
             repo_dir.display()
         ))?;
+    if !checkout_result.status.success() {
+        return Err(anyhow::anyhow!(
+            "Failed to checkout version {} for the repo at: {}",
+            version,
+            repo
+        ));
+    }
+
     fs::rename(repo_dir, dest)?;
     Ok(())
 }
