@@ -74,9 +74,10 @@ impl Vessel {
     /// Downloads the compiler binaries at the version specified in the manifest
     /// and returns the path to them.
     pub fn install_compiler(&self) -> Result<PathBuf> {
-        let version = self.manifest.compiler.as_ref().ok_or(anyhow::anyhow!(
-            "No compiler version was specified in vessel.dhall"
-        ))?;
+        let version =
+            self.manifest.compiler.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("No compiler version was specified in vessel.dhall")
+            })?;
         download_compiler(version)
     }
 
@@ -156,11 +157,11 @@ impl Vessel {
     }
 }
 
-pub fn download_compiler(version: &String) -> Result<PathBuf> {
+pub fn download_compiler(version: &str) -> Result<PathBuf> {
     let bin = Path::new(".vessel").join(".bin");
     let dest = bin.join(&version);
     if dest.exists() {
-        return Ok(dest.to_path_buf());
+        return Ok(dest);
     }
 
     let tmp = Path::new(".vessel").join(".tmp");
@@ -189,7 +190,9 @@ pub fn download_compiler(version: &String) -> Result<PathBuf> {
             "Failed to download Motoko binaries for version {}, with \"{}\"\n\nDetails: {}",
             version,
             response.status(),
-            response.text().unwrap_or("No more details".to_string())
+            response
+                .text()
+                .unwrap_or_else(|_| "No more details".to_string())
         ));
     }
 
@@ -203,7 +206,7 @@ pub fn download_compiler(version: &String) -> Result<PathBuf> {
     }
     fs::rename(tmp_dir, &dest)?;
 
-    Ok(dest.to_path_buf())
+    Ok(dest)
 }
 
 /// Downloads a package either as a tar-ball from Github or clones it as a repo
@@ -258,7 +261,7 @@ fn download_tar_ball(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Resu
             repo,
             version,
             response.status(),
-            response.text().unwrap_or("No more details".to_string())
+            response.text().unwrap_or_else(|_| "No more details".to_string())
         ));
     }
 
