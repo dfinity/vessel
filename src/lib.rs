@@ -74,57 +74,10 @@ impl Vessel {
     /// Downloads the compiler binaries at the version specified in the manifest
     /// and returns the path to them.
     pub fn install_compiler(&self) -> Result<PathBuf> {
-        let version = self.manifest.compiler.clone().ok_or(anyhow::anyhow!(
+        let version = self.manifest.compiler.as_ref().ok_or(anyhow::anyhow!(
             "No compiler version was specified in vessel.dhall"
         ))?;
-
-        let bin = Path::new(".vessel").join(".bin");
-        let dest = bin.join(&version);
-        if dest.exists() {
-            return Ok(dest.to_path_buf());
-        }
-
-        let tmp = Path::new(".vessel").join(".tmp");
-        if !tmp.exists() {
-            fs::create_dir_all(&tmp)?
-        }
-
-        let os = if cfg!(target_os = "linux") {
-            "x86_64-linux"
-        } else if cfg!(target_os = "macos") {
-            "x86_64-darwin"
-        } else {
-            return Err(anyhow::anyhow!(
-                "Installing the compiler is only supported on Linux or MacOS for now"
-            ));
-        };
-
-        let target = format!(
-            "https://download.dfinity.systems/motoko/{}/{}/motoko-{}.tar.gz",
-            version, os, version
-        );
-        let response = reqwest::blocking::get(&target)?;
-
-        if !response.status().is_success() {
-            return Err(anyhow::anyhow!(
-                "Failed to download binaries for version {}, with \"{}\"\n\nDetails: {}",
-                version,
-                response.status(),
-                response.text().unwrap_or("No more details".to_string())
-            ));
-        }
-
-        // We unpack into a temporary directory and rename it in one go once
-        // the full unpacking was successful
-        let tmp_dir: TempDir = tempfile::tempdir_in(tmp)?;
-        Archive::new(GzDecoder::new(response)).unpack(tmp_dir.path())?;
-
-        if !bin.exists() {
-            fs::create_dir_all(&bin)?
-        }
-        fs::rename(tmp_dir, &dest)?;
-
-        Ok(dest.to_path_buf())
+        download_compiler(version)
     }
 
     /// Verifies that every source file inside the given package compiles in the current package set
@@ -201,6 +154,56 @@ impl Vessel {
             Err(err)
         }
     }
+}
+
+pub fn download_compiler(version: &String) -> Result<PathBuf> {
+    let bin = Path::new(".vessel").join(".bin");
+    let dest = bin.join(&version);
+    if dest.exists() {
+        return Ok(dest.to_path_buf());
+    }
+
+    let tmp = Path::new(".vessel").join(".tmp");
+    if !tmp.exists() {
+        fs::create_dir_all(&tmp)?
+    }
+
+    let os = if cfg!(target_os = "linux") {
+        "x86_64-linux"
+    } else if cfg!(target_os = "macos") {
+        "x86_64-darwin"
+    } else {
+        return Err(anyhow::anyhow!(
+            "Installing the compiler is only supported on Linux or MacOS for now"
+        ));
+    };
+
+    let target = format!(
+        "https://download.dfinity.systems/motoko/{}/{}/motoko-{}.tar.gz",
+        version, os, version
+    );
+    let response = reqwest::blocking::get(&target)?;
+
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to download Motoko binaries for version {}, with \"{}\"\n\nDetails: {}",
+            version,
+            response.status(),
+            response.text().unwrap_or("No more details".to_string())
+        ));
+    }
+
+    // We unpack into a temporary directory and rename it in one go once
+    // the full unpacking was successful
+    let tmp_dir: TempDir = tempfile::tempdir_in(tmp)?;
+    Archive::new(GzDecoder::new(response)).unpack(tmp_dir.path())?;
+
+    if !bin.exists() {
+        fs::create_dir_all(&bin)?
+    }
+    fs::rename(tmp_dir, &dest)?;
+
+    Ok(dest.to_path_buf())
 }
 
 /// Downloads a package either as a tar-ball from Github or clones it as a repo

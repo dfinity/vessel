@@ -29,13 +29,20 @@ enum Command {
     Bin,
     /// Verifies that every package in the package set builds successfully
     Verify {
-        /// Path to the `moc` binary
-        #[structopt(long, parse(from_os_str), default_value = "moc")]
-        moc: PathBuf,
+        /// The version of the motoko compiler to use. Mutually exclusive with
+        /// the `moc` flag.
+        #[structopt(long)]
+        version: Option<String>,
+
+        /// Path to the `moc` binary. Mutually exclusive with the `version flag`
+        #[structopt(long, parse(from_os_str))]
+        moc: Option<PathBuf>,
+
         /// Additional arguments to pass to `moc` when checking packages
         #[structopt(long)]
         moc_args: Option<String>,
-        /// When specified only verified the given package name
+
+        /// When specified only verify the given package name
         #[structopt()]
         package: Option<String>,
     },
@@ -94,9 +101,23 @@ fn main() -> Result<()> {
         Command::Verify {
             moc,
             moc_args,
+            version,
             package,
         } => {
             let vessel = vessel::Vessel::new_without_manifest(&opts.package_set)?;
+            let moc = match (moc, version) {
+                (None, None) => PathBuf::from("moc"),
+                (Some(moc), None) => moc,
+                (None, Some(version)) => {
+                    let bin_path = vessel::download_compiler(&version)?;
+                    bin_path.join("moc")
+                }
+                (Some(_), Some(_)) => {
+                    return Err(anyhow::anyhow!(
+                        "The --version and --moc flags are mutually exclusive."
+                    ))
+                }
+            };
             match package {
                 None => vessel.verify_all(&moc, &moc_args),
                 Some(package) => vessel.verify_package(&moc, &moc_args, &package),
