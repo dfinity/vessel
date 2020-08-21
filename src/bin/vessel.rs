@@ -2,6 +2,7 @@ use anyhow::Result;
 use fern::colors::ColoredLevelConfig;
 use fern::Output;
 use log::LevelFilter;
+use std::io::Write;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -24,6 +25,8 @@ enum Command {
     /// Installs all dependencies and outputs the package flags to be passed on
     /// to the Motoko compiler tools
     Sources,
+    /// Installs the compiler binaries and outputs a path to them
+    Bin,
     /// Verifies that every package in the package set builds successfully
     Verify {
         /// Path to the `moc` binary
@@ -69,6 +72,13 @@ fn main() -> Result<()> {
             let _ = vessel.install_packages()?;
             Ok(())
         }
+        Command::Bin => {
+            let vessel = vessel::Vessel::new(&opts.package_set)?;
+            let path = vessel.install_compiler()?;
+            print!("{}", path.display().to_string());
+            std::io::stdout().flush()?;
+            Ok(())
+        }
         Command::Sources => {
             let vessel = vessel::Vessel::new(&opts.package_set)?;
             let sources = vessel
@@ -78,6 +88,7 @@ fn main() -> Result<()> {
                 .collect::<Vec<_>>()
                 .join(" ");
             print!("{}", sources);
+            std::io::stdout().flush()?;
             Ok(())
         }
         Command::Verify {
