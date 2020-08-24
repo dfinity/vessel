@@ -2,6 +2,7 @@ use anyhow::{self, Context, Result};
 use flate2::read::GzDecoder;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
+use std::cfg;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Write;
@@ -68,6 +69,16 @@ impl Vessel {
         info!("Installation complete.");
 
         Ok(paths)
+    }
+
+    /// Downloads the compiler binaries at the version specified in the manifest
+    /// and returns the path to them.
+    pub fn install_compiler(&self) -> Result<PathBuf> {
+        let version =
+            self.manifest.compiler.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("No compiler version was specified in vessel.dhall")
+            })?;
+        download_compiler(version)
     }
 
     /// Verifies that every source file inside the given package compiles in the current package set
@@ -146,6 +157,58 @@ impl Vessel {
     }
 }
 
+pub fn download_compiler(version: &str) -> Result<PathBuf> {
+    let bin = Path::new(".vessel").join(".bin");
+    let dest = bin.join(&version);
+    if dest.exists() {
+        return Ok(dest);
+    }
+
+    let tmp = Path::new(".vessel").join(".tmp");
+    if !tmp.exists() {
+        fs::create_dir_all(&tmp)?
+    }
+
+    let os = if cfg!(target_os = "linux") {
+        "x86_64-linux"
+    } else if cfg!(target_os = "macos") {
+        "x86_64-darwin"
+    } else {
+        return Err(anyhow::anyhow!(
+            "Installing the compiler is only supported on Linux or MacOS for now"
+        ));
+    };
+
+    let target = format!(
+        "https://download.dfinity.systems/motoko/{}/{}/motoko-{}.tar.gz",
+        version, os, version
+    );
+    let response = reqwest::blocking::get(&target)?;
+
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to download Motoko binaries for version {}, with \"{}\"\n\nDetails: {}",
+            version,
+            response.status(),
+            response
+                .text()
+                .unwrap_or_else(|_| "No more details".to_string())
+        ));
+    }
+
+    // We unpack into a temporary directory and rename it in one go once
+    // the full unpacking was successful
+    let tmp_dir: TempDir = tempfile::tempdir_in(tmp)?;
+    Archive::new(GzDecoder::new(response)).unpack(tmp_dir.path())?;
+
+    if !bin.exists() {
+        fs::create_dir_all(&bin)?
+    }
+    fs::rename(tmp_dir, &dest)?;
+
+    Ok(dest)
+}
+
 /// Downloads a package either as a tar-ball from Github or clones it as a repo
 pub fn download_package(package: &Package) -> Result<PathBuf> {
     let package_dir = Path::new(".vessel").join(package.name.clone());
@@ -191,6 +254,16 @@ fn download_tar_ball(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Resu
         version
     );
     let response = reqwest::blocking::get(&target)?;
+
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to download tarball for repo \"{}\" at version \"{}\", with \"{}\"\n\nDetails: {}",
+            repo,
+            version,
+            response.status(),
+            response.text().unwrap_or_else(|_| "No more details".to_string())
+        ));
+    }
 
     // We unpack into a temporary directory and rename it in one go once
     // the full unpacking was successful
@@ -263,7 +336,10 @@ pub fn init() -> Result<()> {
     }
     let mut manifest = fs::File::create("vessel.dhall")?;
     manifest.write_all(
-        br#"{ dependencies = [ "base", "matchers" ] }
+        br#"{
+  dependencies = [ "base", "matchers" ],
+  compiler = Some "0.4.2"
+}
 "#,
     )?;
     let mut manifest = fs::File::create("package-set.dhall")?;
@@ -345,6 +421,7 @@ pub struct PackageSet(pub HashMap<Name, Package>);
 
 #[derive(Debug, PartialEq, Default, Serialize, Deserialize, serde_dhall::StaticType)]
 pub struct Manifest {
+    pub compiler: Option<String>,
     pub dependencies: Vec<Name>,
 }
 
