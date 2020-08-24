@@ -8,7 +8,7 @@ A simple package manager for the Motoko programming language.
 2. Run `vessel init` in your project root.
 3. Edit `vessel.dhall` to include your dependencies (potentially also
    edit `package-set.dhall` to include additional package sources)
-4. Run `moc $(vessel sources) main.mo` to compile the `main.mo` file
+4. Run `$(vessel bin)/moc $(vessel sources) main.mo` to compile the `main.mo` file
    with the installed packages in scope
 
 ## How it works
@@ -36,9 +36,10 @@ file by default.
 
 Your `vessel.dhall` file contains the list of packages you need for your project
 to build. `vessel` will look at this file, and figure out all the transitive
-packages you need using the package set file. Any change to this file requires a
-reload of the language service so your packages can be picked up by your editor
-for now.
+packages you need using the package set file. Optionally it also contains a
+compiler version that `vessel` uses to download the compiler binaries for you.
+Any change to this file requires a reload of the language service so your
+packages can be picked up by your editor for now.
 
 After `vessel` has installed all required packages through cloning or
 downloading tarballs, it puts them in a project local location (the `.vessel`
@@ -79,7 +80,8 @@ Now you can depend on this package by adding `mypackage` to your `vessel.dhall` 
 ### How do I integrate `vessel` into my custom build?
 
 Running `vessel sources` will return flags in a format you can pass directly to
-the various compiler tools.
+the various compiler tools. Running `vessel bin` returns the path containing the
+compiler binaries. Use like so: `$(vessel bin)/mo-doc`.
 
 ## License
 
