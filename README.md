@@ -6,9 +6,21 @@ A simple package manager for the Motoko programming language.
 
 1. Download a copy of the `vessel` binary from the release page or build one yourself
 2. Run `vessel init` in your project root.
-3. Edit `vessel.dhall` to include your dependencies (potentially also
-   edit `package-set.dhall` to include additional package sources)
-4. Run `$(vessel bin)/moc $(vessel sources) main.mo` to compile the `main.mo` file
+3. Edit `vessel.dhall` to include your dependencies (potentially also edit
+   `package-set.dhall` to include additional package sources)
+4. In a dfx project: Edit `dfx.json` under defaults->build->packtool to say `"vessel sources"` like so:
+   ```
+   ...
+   "defaults": {
+     "build": {
+       "packtool": "vessel sources"
+     }
+   }
+   ...
+   ```
+   Then run `dfx build`
+4. In a non-dfx project:
+   Run `$(vessel bin)/moc $(vessel sources) main.mo` to compile the `main.mo` file
    with the installed packages in scope
 
 ## How it works
