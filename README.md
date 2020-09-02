@@ -19,9 +19,10 @@ A simple package manager for the Motoko programming language.
    ...
    ```
    Then run `dfx build`
-4. In a non-dfx project:
-   Run `$(vessel bin)/moc $(vessel sources) main.mo` to compile the `main.mo` file
-   with the installed packages in scope
+4. In a non-dfx project: Run `$(vessel bin)/moc $(vessel sources)
+   -wasi-system-api main.mo` to compile the `main.mo` file with the installed
+   packages in scope and using the `wasi` API to let you run the generated WASM
+   with tools like [wasmtime](https://wasmtime.dev).
 
 ## How it works
 
