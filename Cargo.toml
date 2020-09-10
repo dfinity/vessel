@@ -1,6 +1,6 @@
 [package]
 name = "vessel"
-version = "0.5.1-alpha"
+version = "0.5.1"
 authors = ["kritzcreek <christoph.hegemann1337@gmail.com>"]
 edition = "2018"
 description = "A simple package manager for the Motoko programming language."
