@@ -319,6 +319,21 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
     Ok(())
 }
 
+#[derive(Deserialize)]
+struct GhRelease {
+    tag_name: String,
+}
+
+fn hash_dhall_expression(expr: &str) -> Result<String> {
+    let dhall_expr = dhall::syntax::text::parser::parse_expr(expr)
+        .context(format!("Failed to parse a dhall expression: {}", expr))?;
+    let hash = dhall_expr
+        .hash()
+        .context(format!("Failed to hash the expression: {:?}", dhall_expr))?;
+    let formatted_hash = format!("{}", dhall::syntax::Hash::SHA256(hash.to_vec()));
+    Ok(formatted_hash)
+}
+
 /// Initializes a new vessel project by creating a `vessel.dhall` file with no
 /// dependencies and adding a small package set referencing vessel-package-set
 pub fn init() -> Result<()> {
@@ -334,6 +349,22 @@ pub fn init() -> Result<()> {
             "Failed to initialize, there is an existing vessel.dhall file here"
         ));
     }
+    let client = reqwest::blocking::Client::new();
+    let releases: Vec<GhRelease> = client
+        .get("https://api.github.com/repos/kritzcreek/vessel-package-set/releases")
+        .header(reqwest::header::ACCEPT, "application/vnd.github.v3+json")
+        .header(reqwest::header::USER_AGENT, "vessel")
+        .send()?
+        .json()?;
+
+    let release = &releases[0].tag_name;
+    let package_set_url = format!(
+        "https://github.com/kritzcreek/vessel-package-set/releases/download/{}/package-set.dhall",
+        release
+    );
+    let package_set = client.get(&package_set_url).send()?.text()?;
+    let hash = hash_dhall_expression(&package_set).context("When hashing the package set")?;
+
     let mut manifest = fs::File::create("vessel.dhall")?;
     manifest.write_all(
         br#"{
@@ -343,10 +374,9 @@ pub fn init() -> Result<()> {
 "#,
     )?;
     let mut manifest = fs::File::create("package-set.dhall")?;
-    // TODO: Fetch this upstream URL to point to the available version
-    manifest.write_all(br#"let upstream =
-    https://raw.githubusercontent.com/kritzcreek/vessel-package-set/b8a50b772af45877ed1d7fae929c415820790b01/src/packages.dhall sha256:2ba38db2e5454a25e91841ba93e8f7bdb4b73fd59e0e6e2f3d8550d61fa63b1c
-
+    write!(&mut manifest, "let upstream = {} {}", package_set_url, hash)?;
+    manifest.write_all(
+        br#"
 let Package =
     { name : Text, version : Text, repo : Text, dependencies : List Text }
 
@@ -371,7 +401,8 @@ let
     [] : List Package
 
 in  upstream # additions # overrides
-"#)?;
+"#,
+    )?;
     Ok(())
 }
 
