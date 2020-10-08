@@ -338,7 +338,7 @@ pub fn init() -> Result<()> {
     manifest.write_all(
         br#"{
   dependencies = [ "base", "matchers" ],
-  compiler = Some "0.4.2"
+  compiler = None Text
 }
 "#,
     )?;
