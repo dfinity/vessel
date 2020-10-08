@@ -1099,6 +1099,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde",
+ "serde_json",
  "serde_urlencoded",
  "tokio",
  "tokio-tls",
@@ -1543,6 +1544,7 @@ name = "vessel"
 version = "0.5.2-alpha.0"
 dependencies = [
  "anyhow",
+ "dhall",
  "fern",
  "flate2",
  "log",
