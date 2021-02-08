@@ -97,9 +97,6 @@ the various compiler tools. Running `vessel bin` returns the path containing the
 compiler binaries. Use like so: `$(vessel bin)/mo-doc`.
 
 ## License
+vessel is distributed under the terms of the Apache License (Version 2.0).
 
-Copyright 2020 Christoph Hegemann
-
-This software is subject to the terms of the Mozilla Public License, v. 2.0. If
-a copy of the MPL was not distributed with this file, You can obtain one at
-http://mozilla.org/MPL/2.0/.
+See LICENSE for details.
