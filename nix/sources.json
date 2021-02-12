@@ -5,10 +5,10 @@
         "homepage": "",
         "owner": "justinwoo",
         "repo": "easy-dhall-nix",
-        "rev": "7c22a145fcb8e00b61d29efc7543af0c80d709ed",
-        "sha256": "03qry1wbhyb8i2qz7gcb04hw5d75a4vx2d4xjb6iradj1pc199xg",
+        "rev": "eae7f64c4d6c70681e5a56c84198236930ba425e",
+        "sha256": "1y2x15v8a679vlpxazjpibfwajp6zph60f8wjcm4xflbvazk0dx7",
         "type": "tarball",
-        "url": "https://github.com/justinwoo/easy-dhall-nix/archive/7c22a145fcb8e00b61d29efc7543af0c80d709ed.tar.gz",
+        "url": "https://github.com/justinwoo/easy-dhall-nix/archive/eae7f64c4d6c70681e5a56c84198236930ba425e.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "naersk": {

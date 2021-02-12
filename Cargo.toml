@@ -14,12 +14,12 @@ log = "0.4"
 fern = { version = "0.6", features = ["colored"] }
 tar = "0.4"
 flate2 = "1"
-reqwest = { version = "0.10", features = ["blocking", "json"] }
+reqwest = { version = "0.11", features = ["blocking", "json"] }
 tempfile = "3"
 serde = { version = "1.0", features = ["derive"] }
 structopt = "0.3"
 anyhow = "1.0"
 walkdir = "2"
 topological-sort = "0.1"
-serde_dhall = "0.7"
-dhall = "0.7"
+serde_dhall = "0.10"
+dhall = "0.10"
