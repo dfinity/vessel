@@ -113,7 +113,12 @@ impl Vessel {
                 });
                 let output = cmd.output().context(format!("Failed to run {:?}", cmd))?;
                 if output.status.success() {
-                    info!("Verified \"{}\"", package.name);
+                    let warnings = String::from_utf8(output.stderr)?;
+                    if !warnings.is_empty() {
+                        info!("Verified \"{}\" with output:\n{}", package.name, warnings);
+                    } else {
+                        info!("Verified \"{}\"", package.name);
+                    }
                     Ok(())
                 } else {
                     Err(anyhow::anyhow!(
