@@ -329,9 +329,9 @@ fn hash_dhall_expression(expr: &str) -> Result<String> {
     let dhall_expr = dhall::syntax::text::parser::parse_expr(expr)
         .context(format!("Failed to parse a dhall expression: {}", expr))?;
     let hash = dhall_expr
-        .hash()
+        .sha256_hash()
         .context(format!("Failed to hash the expression: {:?}", dhall_expr))?;
-    let formatted_hash = format!("{}", dhall::syntax::Hash::SHA256(hash.to_vec()));
+    let formatted_hash = format!("{}", dhall::syntax::Hash::SHA256(hash));
     Ok(formatted_hash)
 }
 
