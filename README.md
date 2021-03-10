@@ -4,7 +4,7 @@ A simple package manager for the Motoko programming language.
 
 ## Getting started
 
-1. Download a copy of the `vessel` binary from the release page or build one yourself
+1. Download a copy of the `vessel` binary [from the release page](https://github.com/dfinity/vessel/releases) or build one yourself
 2. Run `vessel init` in your project root.
 3. Edit `vessel.dhall` to include your dependencies (potentially also edit
    `package-set.dhall` to include additional package sources)
