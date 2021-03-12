@@ -298,7 +298,11 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
         .output()
         .context(format!("Failed to clone the repo at {}", repo))?;
     if !clone_result.status.success() {
-        return Err(anyhow::anyhow!("Failed to clone the repo at: {}", repo));
+        return Err(anyhow::anyhow!(
+            "Failed to clone the repo at: {}\nwith:\n{}",
+            repo,
+            std::str::from_utf8(&clone_result.stderr).unwrap()
+        ));
     }
 
     let repo_dir = tmp_dir.path().join("repo");
@@ -314,9 +318,10 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
         ))?;
     if !checkout_result.status.success() {
         return Err(anyhow::anyhow!(
-            "Failed to checkout version {} for the repo at: {}",
+            "Failed to checkout version {} for the repo at: {}\nwith:\n{}",
             version,
-            repo
+            repo,
+            std::str::from_utf8(&checkout_result.stderr).unwrap()
         ));
     }
 
