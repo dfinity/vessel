@@ -21,14 +21,14 @@ pub struct Vessel {
 }
 
 impl Vessel {
-    pub fn new(package_set_file: &PathBuf) -> Result<Vessel> {
+    pub fn new(package_set_file: &Path) -> Result<Vessel> {
         let mut new_vessel: Vessel = Default::default();
         new_vessel.read_package_set(package_set_file)?;
         new_vessel.read_manifest_file()?;
         Ok(new_vessel)
     }
 
-    pub fn new_without_manifest(package_set_file: &PathBuf) -> Result<Vessel> {
+    pub fn new_without_manifest(package_set_file: &Path) -> Result<Vessel> {
         let mut new_vessel: Vessel = Default::default();
         new_vessel.read_package_set(package_set_file)?;
         Ok(new_vessel)
@@ -43,7 +43,7 @@ impl Vessel {
         Ok(())
     }
 
-    fn read_package_set(&mut self, package_set_file: &PathBuf) -> Result<()> {
+    fn read_package_set(&mut self, package_set_file: &Path) -> Result<()> {
         self.package_set = PackageSet::new(
             serde_dhall::from_file(package_set_file)
                 .static_type_annotation()
@@ -82,12 +82,7 @@ impl Vessel {
     }
 
     /// Verifies that every source file inside the given package compiles in the current package set
-    pub fn verify_package(
-        &self,
-        moc: &PathBuf,
-        moc_args: &Option<String>,
-        name: &str,
-    ) -> Result<()> {
+    pub fn verify_package(&self, moc: &Path, moc_args: &Option<String>, name: &str) -> Result<()> {
         match self.package_set.find(name) {
             None => Err(anyhow::anyhow!(
                 "The package \"{}\" does not exist in the package set",
@@ -131,7 +126,7 @@ impl Vessel {
         }
     }
 
-    pub fn verify_all(&self, moc: &PathBuf, moc_args: &Option<String>) -> Result<()> {
+    pub fn verify_all(&self, moc: &Path, moc_args: &Option<String>) -> Result<()> {
         let mut errors: Vec<(Name, anyhow::Error)> = vec![];
         for package in &self.package_set.topo_sorted() {
             if errors
@@ -454,7 +449,9 @@ in  upstream # additions # overrides
 }
 
 pub type Url = String;
+
 pub type Tag = String;
+
 pub type Name = String;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, serde_dhall::StaticType)]
