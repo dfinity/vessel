@@ -336,12 +336,12 @@ struct GhRelease {
 
 type Hash = String;
 
-/// Fetches the latest release of kritzcreek/vessel-package-set and computes its
+/// Fetches the latest release of dfinity/vessel-package-set and computes its
 /// Dhall hash. This way it can be used to initialize the package-set file.
 pub fn fetch_latest_package_set() -> Result<(Url, Hash)> {
     let client = reqwest::blocking::Client::new();
     let response = client
-        .get("https://api.github.com/repos/kritzcreek/vessel-package-set/releases")
+        .get("https://api.github.com/repos/dfinity/vessel-package-set/releases")
         .header(reqwest::header::ACCEPT, "application/vnd.github.v3+json")
         .header(reqwest::header::USER_AGENT, "vessel")
         .send()?;
@@ -364,7 +364,7 @@ pub fn fetch_package_set(tag: &str) -> Result<(Url, Hash)> {
 
 fn fetch_package_set_impl(client: &reqwest::blocking::Client, tag: &str) -> Result<(Url, Hash)> {
     let package_set_url = format!(
-        "https://github.com/kritzcreek/vessel-package-set/releases/download/{}/package-set.dhall",
+        "https://github.com/dfinity/vessel-package-set/releases/download/{}/package-set.dhall",
         tag
     );
     let package_set = client
@@ -398,7 +398,7 @@ pub fn init() -> Result<()> {
         Ok(r) => r,
         Err(e) => {
             warn!("Failed to fetch latest package-set. Initializing with an older fallback version.\n\nDetails: {}", e);
-            ("https://github.com/kritzcreek/vessel-package-set/releases/download/mo-0.4.3-20200916/package-set.dhall".to_string(),
+            ("https://github.com/dfinity/vessel-package-set/releases/download/mo-0.4.3-20200916/package-set.dhall".to_string(),
              "sha256:3e1d8d20e35550bc711ae94f94da8b0091e3a3094f91874ff62686c070478dd7".to_string())
         }
     };
