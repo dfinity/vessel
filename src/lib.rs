@@ -334,20 +334,11 @@ struct GhRelease {
     tag_name: String,
 }
 
-/// Computes the sha256 hash for a given Dhall expression
-fn hash_dhall_expression(expr: &str) -> Result<String> {
-    let dhall_expr = dhall::syntax::text::parser::parse_expr(expr)
-        .context(format!("Failed to parse a dhall expression: {}", expr))?;
-    let hash = dhall_expr
-        .sha256_hash()
-        .context(format!("Failed to hash the expression: {:?}", dhall_expr))?;
-    let formatted_hash = format!("{}", dhall::syntax::Hash::SHA256(hash));
-    Ok(formatted_hash)
-}
+type Hash = String;
 
 /// Fetches the latest release of kritzcreek/vessel-package-set and computes its
 /// Dhall hash. This way it can be used to initialize the package-set file.
-fn fetch_latest_package_set() -> Result<(String, String)> {
+pub fn fetch_latest_package_set() -> Result<(Url, Hash)> {
     let client = reqwest::blocking::Client::new();
     let response = client
         .get("https://api.github.com/repos/kritzcreek/vessel-package-set/releases")
@@ -362,13 +353,40 @@ fn fetch_latest_package_set() -> Result<(String, String)> {
     }
     let releases: Vec<GhRelease> = response.json()?;
     let release = &releases[0].tag_name;
+    fetch_package_set_impl(&client, release)
+}
+
+/// Like `fetch_latest_package_set`, but lets you specify the tag
+pub fn fetch_package_set(tag: &str) -> Result<(Url, Hash)> {
+    let client = reqwest::blocking::Client::new();
+    fetch_package_set_impl(&client, tag)
+}
+
+fn fetch_package_set_impl(client: &reqwest::blocking::Client, tag: &str) -> Result<(Url, Hash)> {
     let package_set_url = format!(
         "https://github.com/kritzcreek/vessel-package-set/releases/download/{}/package-set.dhall",
-        release
+        tag
     );
-    let package_set = client.get(&package_set_url).send()?.text()?;
+    let package_set = client
+        .get(&package_set_url)
+        .send()
+        .context("When downloading the package set release")?
+        .text()
+        .context("When decoding the package set release")?;
     let hash = hash_dhall_expression(&package_set).context("When hashing the package set")?;
     Ok((package_set_url, hash))
+}
+
+/// Computes the sha256 hash for a given Dhall expression
+/// Computes the sha256 hash for a given Dhall expression
+fn hash_dhall_expression(expr: &str) -> Result<String> {
+    let dhall_expr = dhall::syntax::text::parser::parse_expr(expr)
+        .context(format!("Failed to parse a dhall expression: {}", expr))?;
+    let hash = dhall_expr
+        .sha256_hash()
+        .context(format!("Failed to hash the expression: {:?}", dhall_expr))?;
+    let formatted_hash = format!("{}", dhall::syntax::Hash::SHA256(hash));
+    Ok(formatted_hash)
 }
 
 /// Initializes a new vessel project by creating a `vessel.dhall` file with no
