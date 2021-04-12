@@ -22,6 +22,11 @@ enum Command {
     Init,
     /// Installs all dependencies and prints a human readable summary
     Install,
+    /// Outputs the import and hash for the latest vessel-package-set release.
+    UpgradeSet {
+        /// Use this tag instead of latest
+        tag: Option<String>,
+    },
     /// Installs all dependencies and outputs the package flags to be passed on
     /// to the Motoko compiler tools
     Sources,
@@ -77,6 +82,14 @@ fn main() -> Result<()> {
         Command::Install => {
             let vessel = vessel::Vessel::new(&opts.package_set)?;
             let _ = vessel.install_packages()?;
+            Ok(())
+        }
+        Command::UpgradeSet { tag } => {
+            let (url, hash) = match tag {
+                None => vessel::fetch_latest_package_set()?,
+                Some(tag) => vessel::fetch_package_set(&tag)?,
+            };
+            println!("let upstream =\n      {} {}", url, hash);
             Ok(())
         }
         Command::Bin => {

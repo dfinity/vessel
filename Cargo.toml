@@ -1,13 +1,11 @@
 [package]
 name = "vessel"
 version = "0.6.1-alpha.0"
-authors = ["kritzcreek <christoph.hegemann1337@gmail.com>"]
+authors = ["DFINITY Stiftung <languages@dfinity.org>"]
 edition = "2018"
-description = "A simple package manager for the Motoko programming language."
+description = "A package manager for the Motoko programming language."
 license = "Apache-2.0"
 publish = false
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 log = "0.4"

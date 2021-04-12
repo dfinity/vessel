@@ -21,14 +21,14 @@ pub struct Vessel {
 }
 
 impl Vessel {
-    pub fn new(package_set_file: &PathBuf) -> Result<Vessel> {
+    pub fn new(package_set_file: &Path) -> Result<Vessel> {
         let mut new_vessel: Vessel = Default::default();
         new_vessel.read_package_set(package_set_file)?;
         new_vessel.read_manifest_file()?;
         Ok(new_vessel)
     }
 
-    pub fn new_without_manifest(package_set_file: &PathBuf) -> Result<Vessel> {
+    pub fn new_without_manifest(package_set_file: &Path) -> Result<Vessel> {
         let mut new_vessel: Vessel = Default::default();
         new_vessel.read_package_set(package_set_file)?;
         Ok(new_vessel)
@@ -43,7 +43,7 @@ impl Vessel {
         Ok(())
     }
 
-    fn read_package_set(&mut self, package_set_file: &PathBuf) -> Result<()> {
+    fn read_package_set(&mut self, package_set_file: &Path) -> Result<()> {
         self.package_set = PackageSet::new(
             serde_dhall::from_file(package_set_file)
                 .static_type_annotation()
@@ -82,12 +82,7 @@ impl Vessel {
     }
 
     /// Verifies that every source file inside the given package compiles in the current package set
-    pub fn verify_package(
-        &self,
-        moc: &PathBuf,
-        moc_args: &Option<String>,
-        name: &str,
-    ) -> Result<()> {
+    pub fn verify_package(&self, moc: &Path, moc_args: &Option<String>, name: &str) -> Result<()> {
         match self.package_set.find(name) {
             None => Err(anyhow::anyhow!(
                 "The package \"{}\" does not exist in the package set",
@@ -131,7 +126,7 @@ impl Vessel {
         }
     }
 
-    pub fn verify_all(&self, moc: &PathBuf, moc_args: &Option<String>) -> Result<()> {
+    pub fn verify_all(&self, moc: &Path, moc_args: &Option<String>) -> Result<()> {
         let mut errors: Vec<(Name, anyhow::Error)> = vec![];
         for package in &self.package_set.topo_sorted() {
             if errors
@@ -334,23 +329,14 @@ struct GhRelease {
     tag_name: String,
 }
 
-/// Computes the sha256 hash for a given Dhall expression
-fn hash_dhall_expression(expr: &str) -> Result<String> {
-    let dhall_expr = dhall::syntax::text::parser::parse_expr(expr)
-        .context(format!("Failed to parse a dhall expression: {}", expr))?;
-    let hash = dhall_expr
-        .sha256_hash()
-        .context(format!("Failed to hash the expression: {:?}", dhall_expr))?;
-    let formatted_hash = format!("{}", dhall::syntax::Hash::SHA256(hash));
-    Ok(formatted_hash)
-}
+type Hash = String;
 
-/// Fetches the latest release of kritzcreek/vessel-package-set and computes its
+/// Fetches the latest release of dfinity/vessel-package-set and computes its
 /// Dhall hash. This way it can be used to initialize the package-set file.
-fn fetch_latest_package_set() -> Result<(String, String)> {
+pub fn fetch_latest_package_set() -> Result<(Url, Hash)> {
     let client = reqwest::blocking::Client::new();
     let response = client
-        .get("https://api.github.com/repos/kritzcreek/vessel-package-set/releases")
+        .get("https://api.github.com/repos/dfinity/vessel-package-set/releases")
         .header(reqwest::header::ACCEPT, "application/vnd.github.v3+json")
         .header(reqwest::header::USER_AGENT, "vessel")
         .send()?;
@@ -362,13 +348,40 @@ fn fetch_latest_package_set() -> Result<(String, String)> {
     }
     let releases: Vec<GhRelease> = response.json()?;
     let release = &releases[0].tag_name;
+    fetch_package_set_impl(&client, release)
+}
+
+/// Like `fetch_latest_package_set`, but lets you specify the tag
+pub fn fetch_package_set(tag: &str) -> Result<(Url, Hash)> {
+    let client = reqwest::blocking::Client::new();
+    fetch_package_set_impl(&client, tag)
+}
+
+fn fetch_package_set_impl(client: &reqwest::blocking::Client, tag: &str) -> Result<(Url, Hash)> {
     let package_set_url = format!(
-        "https://github.com/kritzcreek/vessel-package-set/releases/download/{}/package-set.dhall",
-        release
+        "https://github.com/dfinity/vessel-package-set/releases/download/{}/package-set.dhall",
+        tag
     );
-    let package_set = client.get(&package_set_url).send()?.text()?;
+    let package_set = client
+        .get(&package_set_url)
+        .send()
+        .context("When downloading the package set release")?
+        .text()
+        .context("When decoding the package set release")?;
     let hash = hash_dhall_expression(&package_set).context("When hashing the package set")?;
     Ok((package_set_url, hash))
+}
+
+/// Computes the sha256 hash for a given Dhall expression
+/// Computes the sha256 hash for a given Dhall expression
+fn hash_dhall_expression(expr: &str) -> Result<String> {
+    let dhall_expr = dhall::syntax::text::parser::parse_expr(expr)
+        .context(format!("Failed to parse a dhall expression: {}", expr))?;
+    let hash = dhall_expr
+        .sha256_hash()
+        .context(format!("Failed to hash the expression: {:?}", dhall_expr))?;
+    let formatted_hash = format!("{}", dhall::syntax::Hash::SHA256(hash));
+    Ok(formatted_hash)
 }
 
 /// Initializes a new vessel project by creating a `vessel.dhall` file with no
@@ -380,7 +393,7 @@ pub fn init() -> Result<()> {
         Ok(r) => r,
         Err(e) => {
             warn!("Failed to fetch latest package-set. Initializing with an older fallback version.\n\nDetails: {}", e);
-            ("https://github.com/kritzcreek/vessel-package-set/releases/download/mo-0.4.3-20200916/package-set.dhall".to_string(),
+            ("https://github.com/dfinity/vessel-package-set/releases/download/mo-0.4.3-20200916/package-set.dhall".to_string(),
              "sha256:3e1d8d20e35550bc711ae94f94da8b0091e3a3094f91874ff62686c070478dd7".to_string())
         }
     };
@@ -436,7 +449,9 @@ in  upstream # additions # overrides
 }
 
 pub type Url = String;
+
 pub type Tag = String;
+
 pub type Name = String;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, serde_dhall::StaticType)]
