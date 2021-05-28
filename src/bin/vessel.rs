@@ -55,7 +55,7 @@ enum Command {
 
 fn setup_logger(opts: &Opts) -> Result<(), fern::InitError> {
     let (log_level, out_channel): (LevelFilter, Output) = match opts.command {
-        Command::Sources => (log::LevelFilter::Error, std::io::stderr().into()),
+        Command::Sources | Command::Bin => (log::LevelFilter::Info, std::io::stderr().into()),
         _ => (log::LevelFilter::Info, std::io::stdout().into()),
     };
     let colors = ColoredLevelConfig::new();
