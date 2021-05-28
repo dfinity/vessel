@@ -4,6 +4,7 @@ use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::cfg;
 use std::collections::{HashMap, HashSet};
+use std::env;
 use std::fs;
 use std::io::Write;
 use std::iter::Iterator;
@@ -18,11 +19,44 @@ use walkdir::WalkDir;
 pub struct Vessel {
     pub package_set: PackageSet,
     pub manifest: Manifest,
+    /// How many parent directories are we nested underneath the project root
+    pub nested: u32,
 }
 
 impl Vessel {
+    fn find_dominating_manifest() -> Result<Option<u32>> {
+        let mut cwd = env::current_dir().context("Unable to access the current directory")?;
+        let mut nested = 0;
+        loop {
+            if cwd.join("vessel.dhall").exists() {
+                if nested != 0 {
+                    info!("Changing working directory to {}", cwd.display());
+                    env::set_current_dir(&cwd).context(format!(
+                        "Failed to change current directory to {}",
+                        cwd.display()
+                    ))?;
+                }
+                return Ok(Some(nested));
+            } else if cwd.pop() {
+                nested += 1;
+            } else {
+                return Ok(None);
+            }
+        }
+    }
+
     pub fn new(package_set_file: &Path) -> Result<Vessel> {
-        let mut new_vessel: Vessel = Default::default();
+        let mut new_vessel = match Vessel::find_dominating_manifest()? {
+            None => {
+                return Err(anyhow::anyhow!(
+                    "Could not find a 'vessel.dhall' file in this directory or a parent one."
+                ))
+            }
+            Some(nested) => Vessel {
+                nested,
+                ..Default::default()
+            },
+        };
         new_vessel.read_package_set(package_set_file)?;
         new_vessel.read_manifest_file()?;
         Ok(new_vessel)
@@ -53,6 +87,18 @@ impl Vessel {
         Ok(())
     }
 
+    fn nested_path(&self, path: PathBuf) -> PathBuf {
+        if self.nested == 0 {
+            return path;
+        }
+
+        let mut res = PathBuf::new();
+        for _ in 0..self.nested {
+            res.push("..");
+        }
+        res.join(path)
+    }
+
     /// Installs all transitive dependencies and returns a mapping of package name -> installation location
     pub fn install_packages(&self) -> Result<Vec<(Name, PathBuf)>> {
         let install_plan = self
@@ -63,7 +109,9 @@ impl Vessel {
 
         let paths = install_plan
             .iter()
-            .map(|package| download_package(package).map(|path| (package.name.clone(), path)))
+            .map(|package| {
+                download_package(package).map(|path| (package.name.clone(), self.nested_path(path)))
+            })
             .collect::<Result<Vec<(String, PathBuf)>>>()?;
 
         info!("Installation complete.");
@@ -78,7 +126,7 @@ impl Vessel {
             self.manifest.compiler.as_ref().ok_or_else(|| {
                 anyhow::anyhow!("No compiler version was specified in vessel.dhall")
             })?;
-        download_compiler(version)
+        download_compiler(version).map(|path| self.nested_path(path))
     }
 
     /// Verifies that every source file inside the given package compiles in the current package set
