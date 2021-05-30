@@ -25,24 +25,20 @@ pub struct Vessel {
 
 impl Vessel {
     fn find_dominating_manifest() -> Result<Option<u32>> {
-        let mut cwd = env::current_dir().context("Unable to access the current directory")?;
-        let mut nested = 0;
-        loop {
-            if cwd.join("vessel.dhall").exists() {
-                if nested != 0 {
-                    info!("Changing working directory to {}", cwd.display());
-                    env::set_current_dir(&cwd).context(format!(
+        let cwd = env::current_dir().context("Unable to access the current directory")?;
+        for (depth, path) in cwd.ancestors().enumerate() {
+            if path.join("vessel.dhall").exists() {
+                if depth != 0 {
+                    info!("Changing working directory to {}", path.display());
+                    env::set_current_dir(&path).context(format!(
                         "Failed to change current directory to {}",
-                        cwd.display()
+                        path.display()
                     ))?;
                 }
-                return Ok(Some(nested));
-            } else if cwd.pop() {
-                nested += 1;
-            } else {
-                return Ok(None);
+                return Ok(Some(depth as u32));
             }
         }
+        Ok(None)
     }
 
     pub fn new(package_set_file: &Path) -> Result<Vessel> {
