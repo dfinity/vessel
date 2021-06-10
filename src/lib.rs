@@ -1,6 +1,7 @@
 use anyhow::{self, Context, Result};
 use flate2::read::GzDecoder;
 use log::{debug, info, warn};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::cfg;
 use std::collections::{HashMap, HashSet};
@@ -214,19 +215,25 @@ pub fn download_compiler(version: &str) -> Result<PathBuf> {
     }
 
     let os = if cfg!(target_os = "linux") {
-        "x86_64-linux"
+        ("x86_64-linux", "linux64")
     } else if cfg!(target_os = "macos") {
-        "x86_64-darwin"
+        ("x86_64-darwin", "macos")
     } else {
         return Err(anyhow::anyhow!(
             "Installing the compiler is only supported on Linux or MacOS for now"
         ));
     };
+    let target = match Version::parse(version) {
+        Ok(semver) if semver > Version::new(0, 6, 2) => format!(
+            "https://github.com/dfinity/motoko/releases/download/{}/motoko-{}-{}.tar.gz",
+            version, os.1, version
+        ),
+        _ => format!(
+            "https://download.dfinity.systems/motoko/{}/{}/motoko-{}.tar.gz",
+            version, os.0, version
+        ),
+    };
 
-    let target = format!(
-        "https://download.dfinity.systems/motoko/{}/{}/motoko-{}.tar.gz",
-        version, os, version
-    );
     let response = reqwest::blocking::get(&target)?;
 
     if !response.status().is_success() {

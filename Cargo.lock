@@ -1124,6 +1124,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "semver"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f3aac57ee7f3272d8395c6e4f502f434f0e289fcd62876f70daa008c20dcabe"
+
+[[package]]
 name = "serde"
 version = "1.0.125"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1503,6 +1509,7 @@ dependencies = [
  "flate2",
  "log",
  "reqwest",
+ "semver",
  "serde",
  "serde_dhall",
  "structopt",
