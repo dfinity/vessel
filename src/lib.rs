@@ -260,7 +260,8 @@ pub fn download_compiler(version: &str) -> Result<PathBuf> {
     Ok(dest)
 }
 
-/// Downloads a package either as a tar-ball from Github or clones it as a repo
+/// Downloads a package either as a tar-ball from Github or clones it as a repo.
+/// Returns its installation location.
 pub fn download_package(package: &Package) -> Result<PathBuf> {
     let package_dir = Path::new(".vessel").join(package.name.clone());
     if !package_dir.exists() {
@@ -294,7 +295,19 @@ pub fn download_package(package: &Package) -> Result<PathBuf> {
             package.name, package.version
         )
     }
-    Ok(repo_dir.join("src"))
+    // include the package path within the repo, if it exists.
+    match package.path {
+        None => {
+            Ok(repo_dir.join("src"))
+        }
+        Some(ref p) => {
+            let q = Path::new(p);
+            assert!(q.is_relative()); // otherwise .join will misbehave
+            Ok(repo_dir.
+               join(q).
+               join("src"))
+        }
+    }
 }
 
 /// Downloads and unpacks a tar-ball from Github into the `dest` path
@@ -370,7 +383,6 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
             std::str::from_utf8(&checkout_result.stderr).unwrap()
         ));
     }
-
     fs::rename(repo_dir, dest)?;
     Ok(())
 }
@@ -505,20 +517,34 @@ pub type Tag = String;
 
 pub type Name = String;
 
+pub type PackagePath = String;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, serde_dhall::StaticType)]
 pub struct Package {
     pub name: Name,
     pub repo: Url,
+    pub path: Option<PackagePath>,
     pub version: Tag,
     pub dependencies: Vec<Name>,
 }
 
 impl Package {
     pub fn install_path(&self) -> PathBuf {
-        Path::new(".vessel")
+        let mut path =
+            Path::new(".vessel")
             .join(self.name.clone())
-            .join(self.version.clone())
-            .join("src")
+            .join(self.version.clone());
+        // include the package path within the repo, if it exists.
+        match self.path {
+            None => {}
+            Some(ref p) => {
+                let q = Path::new(p);
+                assert!(q.is_relative()); // otherwise .join will misbehave
+                path = path.join(q);
+            }
+        };
+        path = path.join("src");
+        path
     }
 
     /// Returns all Motoko sources found inside this package's installation directory
