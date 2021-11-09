@@ -297,15 +297,11 @@ pub fn download_package(package: &Package) -> Result<PathBuf> {
     }
     // include the package path within the repo, if it exists.
     match package.path {
-        None => {
-            Ok(repo_dir.join("src"))
-        }
+        None => Ok(repo_dir.join("src")),
         Some(ref p) => {
             let q = Path::new(p);
             assert!(q.is_relative()); // otherwise .join will misbehave
-            Ok(repo_dir.
-               join(q).
-               join("src"))
+            Ok(repo_dir.join(q).join("src"))
         }
     }
 }
@@ -530,8 +526,7 @@ pub struct Package {
 
 impl Package {
     pub fn install_path(&self) -> PathBuf {
-        let mut path =
-            Path::new(".vessel")
+        let mut path = Path::new(".vessel")
             .join(self.name.clone())
             .join(self.version.clone());
         // include the package path within the repo, if it exists.
