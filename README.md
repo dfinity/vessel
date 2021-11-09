@@ -69,11 +69,37 @@ your package set:
   "name": "mypackage",
   "repo": "file:///home/path/to/mypackage",
   "version": "v1.0.0",
-  "dependencies": ["stdlib"]
+  "dependencies": ["base"]
 }
 ```
 
 Now you can depend on this package by adding `mypackage` to your `vessel.json` file.
+
+
+### What about *multiple packages* in one `repo`?
+
+Suppose that `https://github.com/theUsername/theRepo` has two subdirectories, `apple` and `banana`, each with an organization like a single-repo `vessel` package (a `src` directory, and a `package-set.dhall` file).
+
+Then, we can use these packages in our package set as follows:
+
+```json
+{
+  "name": "apple",
+  "repo": "https://github.com/theUsername/theRepo.git",
+  "path": "apple",
+  "version": "v1.1.1",
+  "dependencies": ["base", "banana"]
+},
+{
+  "name": "banana",
+  "repo": "https://github.com/theUsername/theRepo.git",
+  "path": "banana",
+  "version": "v2.2.2",
+  "dependencies": ["base"]
+}
+```
+
+Notice that the field `path` appears in each entry, to direct `vessel` within the single, shared `repo`.
 
 ### How do I integrate `vessel` into my custom build?
 
