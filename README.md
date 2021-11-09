@@ -93,7 +93,7 @@ Now you can depend on this package by adding `mypackage` to your `vessel.dhall` 
 
 ### What about *multiple packages* in one `repo`?
 
-Suppose that `https://github.com/theUsername/theRepo` has two subdirectories, `apple` and `banana`, each with an organization like a single-repo `vessel` package (a `src` directory, and a `package-set.dhall` file).
+Suppose that `https://github.com/theUsername/theRepo` has two subdirectories, `apple` and `banana`, each with an organization like a single-repo `vessel` package, with its own a `src` directory.
 
 Then, we can use these packages in our package set as follows:
 
