@@ -1,25 +1,24 @@
 [package]
 name = "vessel"
-version = "0.4.1-alpha.0"
-authors = ["kritzcreek <christoph.hegemann1337@gmail.com>"]
+version = "0.6.3-alpha.0"
+authors = ["DFINITY Stiftung <languages@dfinity.org>"]
 edition = "2018"
-description = "A simple package manager for the Motoko programming language."
-license = "MPL-2.0+"
+description = "A package manager for the Motoko programming language."
+license = "Apache-2.0"
 publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-colored = "1.9"
 log = "0.4"
-pretty_env_logger = "0.4"
+fern = { version = "0.6", features = ["colored"] }
 tar = "0.4"
 flate2 = "1"
-reqwest = { version = "0.10", features = ["blocking"] }
+reqwest = { version = "0.11", features = ["blocking", "json"] }
 tempfile = "3"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1"
 structopt = "0.3"
 anyhow = "1.0"
 walkdir = "2"
 topological-sort = "0.1"
+serde_dhall = "0.10"
+dhall = "0.10"
+semver = "1"

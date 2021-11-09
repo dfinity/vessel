@@ -4,12 +4,25 @@ A simple package manager for the Motoko programming language.
 
 ## Getting started
 
-1. Download a copy of the `vessel` binary from the release page or build one yourself
+1. Download a copy of the `vessel` binary [from the release page](https://github.com/dfinity/vessel/releases) or build one yourself
 2. Run `vessel init` in your project root.
-3. Edit `vessel.json` to include your dependencies (potentially also
-   edit `package-set.json` to include additional package sources)
-4. Run `moc $(vessel sources) main.mo` to compile the `main.mo` file
-   with the installed packages in scope
+3. Edit `vessel.dhall` to include your dependencies (potentially also edit
+   `package-set.dhall` to include additional package sources)
+4. In a dfx project: Edit `dfx.json` under defaults->build->packtool to say `"vessel sources"` like so:
+   ```
+   ...
+   "defaults": {
+     "build": {
+       "packtool": "vessel sources"
+     }
+   }
+   ...
+   ```
+   Then run `dfx build`
+4. In a non-dfx project: Run `$(vessel bin)/moc $(vessel sources)
+   -wasi-system-api main.mo` to compile the `main.mo` file with the installed
+   packages in scope and using the `wasi` API to let you run the generated WASM
+   with tools like [wasmtime](https://wasmtime.dev).
 
 ## How it works
 
@@ -29,16 +42,17 @@ between these packages, so that `vessel` can find all the transitively needed
 packages to build your project. There will be a community maintained package set of
 publicly available, open source packages. You can then base your projects
 package set on the public one and extend it with your private and local
-packages. The package set your project uses is stored in the `package-set.json`
+packages. The package set your project uses is stored in the `package-set.dhall`
 file by default.
 
 ### Manifest file
 
-Your `vessel.json` file contains the list of packages you need for your project
+Your `vessel.dhall` file contains the list of packages you need for your project
 to build. `vessel` will look at this file, and figure out all the transitive
-packages you need using the package set file. Any change to this file requires a
-reload of the language service so your packages can be picked up by your editor
-for now.
+packages you need using the package set file. Optionally it also contains a
+compiler version that `vessel` uses to download the compiler binaries for you.
+Any change to this file requires a reload of the language service so your
+packages can be picked up by your editor for now.
 
 After `vessel` has installed all required packages through cloning or
 downloading tarballs, it puts them in a project local location (the `.vessel`
@@ -62,18 +76,19 @@ reset your caches and re-install.
 ### How do I add a local package to my package set?
 
 Make sure your local package is a git repository, then add an entry like so to
-your package set:
+your `additions` in the `package-set.dhall` file:
 
-```json
-{
-  "name": "mypackage",
-  "repo": "file:///home/path/to/mypackage",
-  "version": "v1.0.0",
-  "dependencies": ["base"]
-}
+```dhall
+let additions = [
+   { name = "mypackage"
+   , repo = "file:///home/path/to/mypackage"
+   , version = "v1.0.0"
+   , dependencies = ["base"]
+   }
+]
 ```
 
-Now you can depend on this package by adding `mypackage` to your `vessel.json` file.
+Now you can depend on this package by adding `mypackage` to your `vessel.dhall` file.
 
 
 ### What about *multiple packages* in one `repo`?
@@ -104,12 +119,10 @@ Notice that the field `path` appears in each entry, to direct `vessel` within th
 ### How do I integrate `vessel` into my custom build?
 
 Running `vessel sources` will return flags in a format you can pass directly to
-the various compiler tools.
+the various compiler tools. Running `vessel bin` returns the path containing the
+compiler binaries. Use like so: `$(vessel bin)/mo-doc`.
 
 ## License
+vessel is distributed under the terms of the Apache License (Version 2.0).
 
-Copyright 2020 Christoph Hegemann
-
-This software is subject to the terms of the Mozilla Public License, v. 2.0. If
-a copy of the MPL was not distributed with this file, You can obtain one at
-http://mozilla.org/MPL/2.0/.
+See LICENSE for details.

@@ -1,11 +1,13 @@
 use anyhow::{self, Context, Result};
-use colored::*;
 use flate2::read::GzDecoder;
-use log::debug;
-use reqwest;
+use log::{debug, info, warn};
+use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::fs::{self, File};
+use std::cfg;
+use std::collections::{HashMap, HashSet};
+use std::env;
+use std::fs;
+use std::io::Write;
 use std::iter::Iterator;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -16,55 +18,82 @@ use walkdir::WalkDir;
 
 #[derive(Debug, Default)]
 pub struct Vessel {
-    pub output_for_humans: bool,
     pub package_set: PackageSet,
     pub manifest: Manifest,
+    /// How many parent directories are we nested underneath the project root
+    pub nested: u32,
 }
 
 impl Vessel {
-    pub fn new(output_for_humans: bool, package_set_file: &PathBuf) -> Result<Vessel> {
-        let mut new_vessel: Vessel = Default::default();
-        new_vessel.output_for_humans = output_for_humans;
+    fn find_dominating_manifest() -> Result<Option<u32>> {
+        let cwd = env::current_dir().context("Unable to access the current directory")?;
+        for (depth, path) in cwd.ancestors().enumerate() {
+            if path.join("vessel.dhall").exists() {
+                if depth != 0 {
+                    info!("Changing working directory to {}", path.display());
+                    env::set_current_dir(&path).context(format!(
+                        "Failed to change current directory to {}",
+                        path.display()
+                    ))?;
+                }
+                return Ok(Some(depth as u32));
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn new(package_set_file: &Path) -> Result<Vessel> {
+        let mut new_vessel = match Vessel::find_dominating_manifest()? {
+            None => {
+                return Err(anyhow::anyhow!(
+                    "Could not find a 'vessel.dhall' file in this directory or a parent one."
+                ))
+            }
+            Some(nested) => Vessel {
+                nested,
+                ..Default::default()
+            },
+        };
         new_vessel.read_package_set(package_set_file)?;
         new_vessel.read_manifest_file()?;
         Ok(new_vessel)
     }
 
-    pub fn new_without_manifest(
-        output_for_humans: bool,
-        package_set_file: &PathBuf,
-    ) -> Result<Vessel> {
+    pub fn new_without_manifest(package_set_file: &Path) -> Result<Vessel> {
         let mut new_vessel: Vessel = Default::default();
-        new_vessel.output_for_humans = output_for_humans;
         new_vessel.read_package_set(package_set_file)?;
         Ok(new_vessel)
     }
 
     fn read_manifest_file(&mut self) -> Result<()> {
-        let manifest_file =
-            File::open("vessel.json").context("Failed to open the vessel.json file")?;
-        self.manifest = serde_json::from_reader(manifest_file)
-            .context("Failed to parse the vessel.json file")?;
+        let manifest_file = PathBuf::from("vessel.dhall");
+        self.manifest = serde_dhall::from_file(manifest_file)
+            .static_type_annotation()
+            .parse()
+            .context("Failed to parse the vessel.dhall file")?;
         Ok(())
     }
 
-    fn read_package_set(&mut self, package_set_file: &PathBuf) -> Result<()> {
-        let package_set_file = File::open(package_set_file).context(format!(
-            "Failed to open the package set file at \"{}\"",
-            package_set_file.display()
-        ))?;
-        self.package_set = serde_json::from_reader(package_set_file)
-            .context("Failed to parse the package set file")?;
+    fn read_package_set(&mut self, package_set_file: &Path) -> Result<()> {
+        self.package_set = PackageSet::new(
+            serde_dhall::from_file(package_set_file)
+                .static_type_annotation()
+                .parse()
+                .context("Failed to parse the package set file")?,
+        );
         Ok(())
     }
 
-    pub fn for_humans<F>(&self, s: F)
-    where
-        F: FnOnce(),
-    {
-        if self.output_for_humans {
-            s()
+    fn nested_path(&self, path: PathBuf) -> PathBuf {
+        if self.nested == 0 {
+            return path;
         }
+
+        let mut res = PathBuf::new();
+        for _ in 0..self.nested {
+            res.push("..");
+        }
+        res.join(path)
     }
 
     /// Installs all transitive dependencies and returns a mapping of package name -> installation location
@@ -73,82 +102,32 @@ impl Vessel {
             .package_set
             .transitive_deps(self.manifest.dependencies.clone());
 
-        self.for_humans(|| {
-            println!(
-                "{} Installing {} packages",
-                "[Info]".blue(),
-                install_plan.len()
-            )
-        });
+        info!("Installing {} packages", install_plan.len());
 
         let paths = install_plan
             .iter()
             .map(|package| {
-                self.download_package(package)
-                    .map(|path| (package.name.clone(), path))
+                download_package(package).map(|path| (package.name.clone(), self.nested_path(path)))
             })
             .collect::<Result<Vec<(String, PathBuf)>>>()?;
 
-        self.for_humans(|| println!("{} Installation complete.", "[Info]".blue()));
+        info!("Installation complete.");
 
         Ok(paths)
     }
 
-    /// Downloads a package either as a tar-ball from Github or clones it as a repo
-    pub fn download_package(&self, package: &Package) -> Result<PathBuf> {
-        let package_dir = Path::new(".vessel").join(package.name.clone());
-        if !package_dir.exists() {
-            fs::create_dir_all(&package_dir).context(format!(
-                "Failed to create the package directory at {}",
-                package_dir.display()
-            ))?;
-        }
-        let repo_dir = package_dir.join(&package.version);
-        if !repo_dir.exists() {
-            if package.repo.starts_with("https://github.com") {
-                self.for_humans(|| {
-                    println!(
-                        "{} Downloading tar-ball: \"{}\"",
-                        "[Info]".blue(),
-                        package.name
-                    )
-                });
-                download_tar_ball(&repo_dir, &package.repo, &package.version).or_else(|_| {
-                    self.for_humans(|| {
-                        println!(
-                            "{} Downloading tar-ball failed, cloning as git repo instead: \"{}\"",
-                            "[Warn]".yellow(),
-                            package.name
-                        )
-                    });
-                    clone_package(&repo_dir, &package.repo, &package.version)
-                })?
-            } else {
-                self.for_humans(|| {
-                    println!(
-                        "{} Cloning git repository: \"{}\"",
-                        "[Info]".blue(),
-                        package.name
-                    )
-                });
-                clone_package(&repo_dir, &package.repo, &package.version)?
-            }
-        } else {
-            debug!(
-                "{} at version {} has already been downloaded",
-                package.name, package.version
-            )
-        }
-        Ok(repo_dir.join("src"))
+    /// Downloads the compiler binaries at the version specified in the manifest
+    /// and returns the path to them.
+    pub fn install_compiler(&self) -> Result<PathBuf> {
+        let version =
+            self.manifest.compiler.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("No compiler version was specified in vessel.dhall")
+            })?;
+        download_compiler(version).map(|path| self.nested_path(path))
     }
 
     /// Verifies that every source file inside the given package compiles in the current package set
-    pub fn verify_package(
-        &self,
-        moc: &PathBuf,
-        moc_args: &Option<String>,
-        name: &str,
-    ) -> Result<()> {
+    pub fn verify_package(&self, moc: &Path, moc_args: &Option<String>, name: &str) -> Result<()> {
         match self.package_set.find(name) {
             None => Err(anyhow::anyhow!(
                 "The package \"{}\" does not exist in the package set",
@@ -160,21 +139,26 @@ impl Vessel {
                 if let Some(args) = moc_args {
                     cmd.args(args.split(' '));
                 }
-                self.download_package(package)?;
+                download_package(&package)?;
                 let dependencies = self
                     .package_set
                     .transitive_deps(package.dependencies.clone());
                 for package in dependencies {
-                    let path = self.download_package(package)?;
+                    let path = download_package(&package)?;
                     cmd.arg("--package").arg(&package.name).arg(path);
                 }
 
                 package.sources().for_each(|entry_point| {
                     cmd.arg(entry_point);
                 });
-                let output = cmd.output()?;
+                let output = cmd.output().context(format!("Failed to run {:?}", cmd))?;
                 if output.status.success() {
-                    println!("{} Verified \"{}\"", "[Info]".blue(), package.name);
+                    let warnings = String::from_utf8(output.stderr)?;
+                    if !warnings.is_empty() {
+                        info!("Verified \"{}\" with output:\n{}", package.name, warnings);
+                    } else {
+                        info!("Verified \"{}\"", package.name);
+                    }
                     Ok(())
                 } else {
                     Err(anyhow::anyhow!(
@@ -187,7 +171,7 @@ impl Vessel {
         }
     }
 
-    pub fn verify_all(&self, moc: &PathBuf, moc_args: &Option<String>) -> Result<()> {
+    pub fn verify_all(&self, moc: &Path, moc_args: &Option<String>) -> Result<()> {
         let mut errors: Vec<(Name, anyhow::Error)> = vec![];
         for package in &self.package_set.topo_sorted() {
             if errors
@@ -218,8 +202,103 @@ impl Vessel {
     }
 }
 
+pub fn download_compiler(version: &str) -> Result<PathBuf> {
+    let bin = Path::new(".vessel").join(".bin");
+    let dest = bin.join(&version);
+    if dest.exists() {
+        return Ok(dest);
+    }
+
+    let tmp = Path::new(".vessel").join(".tmp");
+    if !tmp.exists() {
+        fs::create_dir_all(&tmp)?
+    }
+
+    let os = if cfg!(target_os = "linux") {
+        ("x86_64-linux", "linux64")
+    } else if cfg!(target_os = "macos") {
+        ("x86_64-darwin", "macos")
+    } else {
+        return Err(anyhow::anyhow!(
+            "Installing the compiler is only supported on Linux or MacOS for now"
+        ));
+    };
+    let target = match Version::parse(version) {
+        Ok(semver) if semver > Version::new(0, 6, 2) => format!(
+            "https://github.com/dfinity/motoko/releases/download/{}/motoko-{}-{}.tar.gz",
+            version, os.1, version
+        ),
+        _ => format!(
+            "https://download.dfinity.systems/motoko/{}/{}/motoko-{}.tar.gz",
+            version, os.0, version
+        ),
+    };
+
+    let response = reqwest::blocking::get(&target)?;
+
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to download Motoko binaries for version {}, with \"{}\"\n\nDetails: {}",
+            version,
+            response.status(),
+            response
+                .text()
+                .unwrap_or_else(|_| "No more details".to_string())
+        ));
+    }
+
+    // We unpack into a temporary directory and rename it in one go once
+    // the full unpacking was successful
+    let tmp_dir: TempDir = tempfile::tempdir_in(tmp)?;
+    Archive::new(GzDecoder::new(response)).unpack(tmp_dir.path())?;
+
+    if !bin.exists() {
+        fs::create_dir_all(&bin)?
+    }
+    fs::rename(tmp_dir, &dest)?;
+
+    Ok(dest)
+}
+
+/// Downloads a package either as a tar-ball from Github or clones it as a repo
+pub fn download_package(package: &Package) -> Result<PathBuf> {
+    let package_dir = Path::new(".vessel").join(package.name.clone());
+    if !package_dir.exists() {
+        fs::create_dir_all(&package_dir).context(format!(
+            "Failed to create the package directory at {}",
+            package_dir.display()
+        ))?;
+    }
+    let repo_dir = package_dir.join(&package.version);
+    if !repo_dir.exists() {
+        let tmp = Path::new(".vessel").join(".tmp");
+        if !tmp.exists() {
+            fs::create_dir_all(&tmp)?
+        }
+        if package.repo.starts_with("https://github.com") {
+            info!("Downloading tar-ball: \"{}\"", package.name);
+            download_tar_ball(&tmp, &repo_dir, &package.repo, &package.version).or_else(|_| {
+                warn!(
+                    "Downloading tar-ball failed, cloning as git repo instead: \"{}\"",
+                    package.name
+                );
+                clone_package(&tmp, &repo_dir, &package.repo, &package.version)
+            })?
+        } else {
+            info!("Cloning git repository: \"{}\"", package.name);
+            clone_package(&tmp, &repo_dir, &package.repo, &package.version)?
+        }
+    } else {
+        debug!(
+            "{} at version {} has already been downloaded",
+            package.name, package.version
+        )
+    }
+    Ok(repo_dir.join("src"))
+}
+
 /// Downloads and unpacks a tar-ball from Github into the `dest` path
-fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
+fn download_tar_ball(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<()> {
     let target = format!(
         "{}/archive/{}/.tar.gz",
         repo.trim_end_matches(".git"),
@@ -227,9 +306,19 @@ fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
     );
     let response = reqwest::blocking::get(&target)?;
 
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to download tarball for repo \"{}\" at version \"{}\", with \"{}\"\n\nDetails: {}",
+            repo,
+            version,
+            response.status(),
+            response.text().unwrap_or_else(|_| "No more details".to_string())
+        ));
+    }
+
     // We unpack into a temporary directory and rename it in one go once
     // the full unpacking was successful
-    let tmp_dir: TempDir = tempfile::tempdir()?;
+    let tmp_dir: TempDir = tempfile::tempdir_in(tmp)?;
     Archive::new(GzDecoder::new(response)).unpack(tmp_dir.path())?;
 
     // We expect an unpacked repo to contain exactly one directory
@@ -247,15 +336,23 @@ fn download_tar_ball(dest: &Path, repo: &str, version: &str) -> Result<()> {
 }
 
 /// Clones `repo` into `dest` and checks out `version`
-fn clone_package(dest: &Path, repo: &str, version: &str) -> Result<()> {
-    let tmp_dir: TempDir = tempfile::tempdir()?;
-    Command::new("git")
+fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<()> {
+    let tmp_dir: TempDir = tempfile::tempdir_in(tmp)?;
+    let clone_result = Command::new("git")
         .args(&["clone", repo, "repo"])
         .current_dir(tmp_dir.path())
         .output()
         .context(format!("Failed to clone the repo at {}", repo))?;
+    if !clone_result.status.success() {
+        return Err(anyhow::anyhow!(
+            "Failed to clone the repo at: {}\nwith:\n{}",
+            repo,
+            std::str::from_utf8(&clone_result.stderr).unwrap()
+        ));
+    }
+
     let repo_dir = tmp_dir.path().join("repo");
-    Command::new("git")
+    let checkout_result = Command::new("git")
         .args(&["-c", "advice.detachedHead=false", "checkout", version])
         .current_dir(&repo_dir)
         .output()
@@ -265,55 +362,150 @@ fn clone_package(dest: &Path, repo: &str, version: &str) -> Result<()> {
             repo,
             repo_dir.display()
         ))?;
+    if !checkout_result.status.success() {
+        return Err(anyhow::anyhow!(
+            "Failed to checkout version {} for the repo at: {}\nwith:\n{}",
+            version,
+            repo,
+            std::str::from_utf8(&checkout_result.stderr).unwrap()
+        ));
+    }
+
     fs::rename(repo_dir, dest)?;
     Ok(())
 }
 
-/// Initializes a new vessel project by creating a `vessel.json` file with no
-/// dependencies and adding a dummy package set (for now, we should pull this
-/// from a community maintained repository instead)
+#[derive(Deserialize)]
+struct GhRelease {
+    tag_name: String,
+}
+
+type Hash = String;
+
+/// Fetches the latest release of dfinity/vessel-package-set and computes its
+/// Dhall hash. This way it can be used to initialize the package-set file.
+pub fn fetch_latest_package_set() -> Result<(Url, Hash)> {
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .get("https://api.github.com/repos/dfinity/vessel-package-set/releases")
+        .header(reqwest::header::ACCEPT, "application/vnd.github.v3+json")
+        .header(reqwest::header::USER_AGENT, "vessel")
+        .send()?;
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to read Github releases: {:#?}",
+            response
+        ));
+    }
+    let releases: Vec<GhRelease> = response.json()?;
+    let release = &releases[0].tag_name;
+    fetch_package_set_impl(&client, release)
+}
+
+/// Like `fetch_latest_package_set`, but lets you specify the tag
+pub fn fetch_package_set(tag: &str) -> Result<(Url, Hash)> {
+    let client = reqwest::blocking::Client::new();
+    fetch_package_set_impl(&client, tag)
+}
+
+fn fetch_package_set_impl(client: &reqwest::blocking::Client, tag: &str) -> Result<(Url, Hash)> {
+    let package_set_url = format!(
+        "https://github.com/dfinity/vessel-package-set/releases/download/{}/package-set.dhall",
+        tag
+    );
+    let package_set = client
+        .get(&package_set_url)
+        .send()
+        .context("When downloading the package set release")?
+        .text()
+        .context("When decoding the package set release")?;
+    let hash = hash_dhall_expression(&package_set).context("When hashing the package set")?;
+    Ok((package_set_url, hash))
+}
+
+/// Computes the sha256 hash for a given Dhall expression
+/// Computes the sha256 hash for a given Dhall expression
+fn hash_dhall_expression(expr: &str) -> Result<String> {
+    let dhall_expr = dhall::syntax::text::parser::parse_expr(expr)
+        .context(format!("Failed to parse a dhall expression: {}", expr))?;
+    let hash = dhall_expr
+        .sha256_hash()
+        .context(format!("Failed to hash the expression: {:?}", dhall_expr))?;
+    let formatted_hash = format!("{}", dhall::syntax::Hash::SHA256(hash));
+    Ok(formatted_hash)
+}
+
+/// Initializes a new vessel project by creating a `vessel.dhall` file with no
+/// dependencies and adding a small package set referencing vessel-package-set
 pub fn init() -> Result<()> {
-    let package_set_path: PathBuf = PathBuf::from("package-set.json");
-    let manifest_path: PathBuf = PathBuf::from("vessel.json");
+    let package_set_path: PathBuf = PathBuf::from("package-set.dhall");
+    let manifest_path: PathBuf = PathBuf::from("vessel.dhall");
+    let (package_set_url, hash) = match fetch_latest_package_set() {
+        Ok(r) => r,
+        Err(e) => {
+            warn!("Failed to fetch latest package-set. Initializing with an older fallback version.\n\nDetails: {}", e);
+            ("https://github.com/dfinity/vessel-package-set/releases/download/mo-0.4.3-20200916/package-set.dhall".to_string(),
+             "sha256:3e1d8d20e35550bc711ae94f94da8b0091e3a3094f91874ff62686c070478dd7".to_string())
+        }
+    };
     if package_set_path.exists() {
         return Err(anyhow::anyhow!(
-            "Failed to initialize, there is an existing package-set.json file here"
+            "Failed to initialize, there is an existing package-set.dhall file here"
         ));
     }
     if manifest_path.exists() {
         return Err(anyhow::anyhow!(
-            "Failed to initialize, there is an existing vessel.json file here"
+            "Failed to initialize, there is an existing vessel.dhall file here"
         ));
     }
-    let initial_package_set: PackageSet = PackageSet(vec![{
-        Package {
-            name: "leftpad".to_string(),
-            repo: "https://github.com/kritzcreek/mo-leftpad.git".to_string(),
-            version: "v1.0.0".to_string(),
-            dependencies: vec![],
-        }
-    }]);
-    let initial_manifest: Manifest = Manifest {
-        dependencies: vec![],
-    };
-    let mut package_set_file =
-        File::create(package_set_path).context("Failed to create the package-set.json file")?;
-    serde_json::to_writer_pretty(&mut package_set_file, &initial_package_set)
-        .context("Failed to create the package-set.json file")?;
+    let mut manifest = fs::File::create("vessel.dhall")?;
+    manifest.write_all(
+        br#"{
+  dependencies = [ "base", "matchers" ],
+  compiler = None Text
+}
+"#,
+    )?;
+    let mut manifest = fs::File::create("package-set.dhall")?;
+    write!(&mut manifest, "let upstream = {} {}", package_set_url, hash)?;
+    manifest.write_all(
+        br#"
+let Package =
+    { name : Text, version : Text, repo : Text, dependencies : List Text }
 
-    let mut manifest_file =
-        File::create(manifest_path).context("Failed to create the vessel.json file")?;
-    serde_json::to_writer_pretty(&mut manifest_file, &initial_manifest)
-        .context("Failed to create the vessel.json file")?;
+let
+  -- This is where you can add your own packages to the package-set
+  additions =
+    [] : List Package
 
+let
+  {- This is where you can override existing packages in the package-set
+
+     For example, if you wanted to use version `v2.0.0` of the foo library:
+     let overrides = [
+         { name = "foo"
+         , version = "v2.0.0"
+         , repo = "https://github.com/bar/foo"
+         , dependencies = [] : List Text
+         }
+     ]
+  -}
+  overrides =
+    [] : List Package
+
+in  upstream # additions # overrides
+"#,
+    )?;
     Ok(())
 }
 
 pub type Url = String;
+
 pub type Tag = String;
+
 pub type Name = String;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, serde_dhall::StaticType)]
 pub struct Package {
     pub name: Name,
     pub repo: Url,
@@ -348,18 +540,29 @@ impl Package {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
-pub struct PackageSet(pub Vec<Package>);
+// This isn't normalized, as the package name is duplicated, but it's too handy
+// to have a `Package` carry its name along.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PackageSet(pub HashMap<Name, Package>);
 
-#[derive(Debug, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Default, Serialize, Deserialize, serde_dhall::StaticType)]
 pub struct Manifest {
+    pub compiler: Option<String>,
     pub dependencies: Vec<Name>,
 }
 
 impl PackageSet {
+    fn new(packages: Vec<Package>) -> PackageSet {
+        let mut package_set = HashMap::new();
+        for package in packages {
+            package_set.insert(package.name.clone(), package);
+        }
+        PackageSet(package_set)
+    }
+
     /// Finds a package by name
     fn find(&self, name: &str) -> Option<&Package> {
-        self.0.iter().find(|p| p.name == *name)
+        self.0.get(name)
     }
 
     fn find_unsafe(&self, name: &str) -> &Package {
@@ -388,10 +591,10 @@ impl PackageSet {
 
     pub fn topo_sorted(&self) -> Vec<&Package> {
         let mut ts = TopologicalSort::<&str>::new();
-        for package in &self.0 {
-            ts.insert(package.name.as_ref());
+        for (name, package) in &self.0 {
+            ts.insert(name.as_ref());
             for dep in &package.dependencies {
-                ts.add_dependency(dep.as_ref(), package.name.as_ref())
+                ts.add_dependency(dep.as_ref(), name.as_ref())
             }
         }
         ts.map(|name| self.find_unsafe(name)).collect()
@@ -415,7 +618,7 @@ mod test {
     fn it_finds_a_transitive_dependency() {
         let a = mk_package("A", vec!["B"]);
         let b = mk_package("B", vec![]);
-        let ps = PackageSet(vec![a.clone(), b.clone()]);
+        let ps = PackageSet::new(vec![a.clone(), b.clone()]);
         assert_eq!(vec![&b], ps.transitive_deps(vec!["B".to_string()]));
         assert_eq!(vec![&a, &b], ps.transitive_deps(vec!["A".to_string()]))
     }
@@ -425,7 +628,7 @@ mod test {
         let a = mk_package("A", vec!["B"]);
         let b = mk_package("B", vec![]);
         let c = mk_package("C", vec!["B"]);
-        let ps = PackageSet(vec![a.clone(), b.clone(), c.clone()]);
+        let ps = PackageSet::new(vec![a.clone(), b.clone(), c.clone()]);
         assert_eq!(
             vec![&a, &b, &c],
             ps.transitive_deps(vec!["A".to_string(), "C".to_string()])
