@@ -27,11 +27,16 @@ A simple package manager for the Motoko programming language.
 ## How it works
 
 `vessel` is inspired by the [spago](https://github.com/purescript/spago) package
-manager for PureScript. Any git repository with a `src/` directory is a valid
+manager for PureScript.
+
+Any git repository with a `src/` directory is a valid
 package to `vessel`, which is a flexible and lightweight approach to package
 management, that is easily extended with more guarantees and features as our
 community grows. The two concepts you need to understand to work with `vessel`
 are _package sets_ and the _manifest_ file.
+
+If your git repository uses a source directory other than `src/`, you can still use `vessel`
+by specifying that source `path` explicitly.
 
 ### Package sets
 
@@ -82,6 +87,7 @@ your `additions` in the `package-set.dhall` file:
 let additions = [
    { name = "mypackage"
    , repo = "file:///home/path/to/mypackage"
+   , path = None Text
    , version = "v1.0.0"
    , dependencies = ["base"]
    }
@@ -91,24 +97,32 @@ let additions = [
 Now you can depend on this package by adding `mypackage` to your `vessel.dhall` file.
 
 
+### What about *custom source paths* in a repo?
+
+Suppose that `https://github.com/theUsername/theRepo` uses a path other than `src/` for its Motoko source code.
+
+Assuming that the source path is `foo/bar`, we can specify that path using `path = Some "foo/bar"` for the package entry.
+
 ### What about *multiple packages* in one `repo`?
 
-Suppose that `https://github.com/theUsername/theRepo` has two subdirectories, `apple` and `banana`, each with an organization like a single-repo `vessel` package, with its own a `src` directory.
+The `path` field also permits multiple packages within one repository.
 
-Then, we can use these packages in our package set as follows:
+Suppose that `https://github.com/theUsername/theRepo` has two subdirectories, `apple` and `banana`, each with the source code for a `vessel` package.
 
-```json
+We can specify these packages in our package set as follows:
+
+```dhall
 {
   "name": "apple",
   "repo": "https://github.com/theUsername/theRepo.git",
-  "path": "apple",
+  "path": Some "apple/src",
   "version": "v1.1.1",
   "dependencies": ["base", "banana"]
 },
 {
   "name": "banana",
   "repo": "https://github.com/theUsername/theRepo.git",
-  "path": "banana",
+  "path": Some "banana/src",
   "version": "v2.2.2",
   "dependencies": ["base"]
 }

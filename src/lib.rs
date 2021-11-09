@@ -301,7 +301,7 @@ pub fn download_package(package: &Package) -> Result<PathBuf> {
         Some(ref p) => {
             let q = Path::new(p);
             assert!(q.is_relative()); // otherwise .join will misbehave
-            Ok(repo_dir.join(q).join("src"))
+            Ok(repo_dir.join(q))
         }
     }
 }
@@ -526,20 +526,18 @@ pub struct Package {
 
 impl Package {
     pub fn install_path(&self) -> PathBuf {
-        let mut path = Path::new(".vessel")
+        let path = Path::new(".vessel")
             .join(self.name.clone())
             .join(self.version.clone());
         // include the package path within the repo, if it exists.
         match self.path {
-            None => {}
+            None => path.join("src"),
             Some(ref p) => {
                 let q = Path::new(p);
                 assert!(q.is_relative()); // otherwise .join will misbehave
-                path = path.join(q);
+                path.join(q)
             }
-        };
-        path = path.join("src");
-        path
+        }
     }
 
     /// Returns all Motoko sources found inside this package's installation directory
