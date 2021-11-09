@@ -635,6 +635,7 @@ mod test {
         Package {
             name: name.to_string(),
             repo: "".to_string(),
+            path: None,
             version: "".to_string(),
             dependencies: deps.into_iter().map(|x| x.to_string()).collect(),
         }
