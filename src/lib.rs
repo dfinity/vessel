@@ -234,7 +234,11 @@ pub fn download_compiler(version: &str) -> Result<PathBuf> {
         ),
     };
 
-    let response = reqwest::blocking::get(&target)?;
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .get(&target)
+        .header(reqwest::header::USER_AGENT, "vessel")
+        .send()?;
 
     if !response.status().is_success() {
         return Err(anyhow::anyhow!(
