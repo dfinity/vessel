@@ -95,7 +95,7 @@ fn main() -> Result<()> {
         Command::Bin => {
             let vessel = vessel::Vessel::new(&opts.package_set)?;
             let path = vessel.install_compiler()?;
-            print!("{}", path.display().to_string());
+            print!("{}", path.display());
             std::io::stdout().flush()?;
             Ok(())
         }
@@ -104,7 +104,7 @@ fn main() -> Result<()> {
             let sources = vessel
                 .install_packages()?
                 .into_iter()
-                .map(|(name, path)| format!("--package {} {}", name, path.display().to_string()))
+                .map(|(name, path)| format!("--package {} {}", name, path.display()))
                 .collect::<Vec<_>>()
                 .join(" ");
             print!("{}", sources);

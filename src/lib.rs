@@ -139,12 +139,12 @@ impl Vessel {
                 if let Some(args) = moc_args {
                     cmd.args(args.split(' '));
                 }
-                download_package(&package)?;
+                download_package(package)?;
                 let dependencies = self
                     .package_set
                     .transitive_deps(package.dependencies.clone());
                 for package in dependencies {
-                    let path = download_package(&package)?;
+                    let path = download_package(package)?;
                     cmd.arg("--package").arg(&package.name).arg(path);
                 }
 
@@ -174,11 +174,7 @@ impl Vessel {
     pub fn verify_all(&self, moc: &Path, moc_args: &Option<String>) -> Result<()> {
         let mut errors: Vec<(Name, anyhow::Error)> = vec![];
         for package in &self.package_set.topo_sorted() {
-            if errors
-                .iter()
-                .find(|(n, _)| package.dependencies.contains(n))
-                .is_none()
-            {
+            if errors.iter().any(|(n, _)| package.dependencies.contains(n)) {
                 if let Err(err) = self.verify_package(moc, moc_args, &package.name) {
                     errors.push((package.name.clone(), err))
                 }
