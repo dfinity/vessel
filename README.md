@@ -97,6 +97,6 @@ the various compiler tools. Running `vessel bin` returns the path containing the
 compiler binaries. Use like so: `$(vessel bin)/mo-doc`.
 
 ## License
-vessel is distributed under the terms of the Apache License (Version 2.0).
+`vessel` is distributed under the terms of the Apache License (Version 2.0).
 
 See LICENSE for details.
