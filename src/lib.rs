@@ -139,12 +139,12 @@ impl Vessel {
                 if let Some(args) = moc_args {
                     cmd.args(args.split(' '));
                 }
-                download_package(&package)?;
+                download_package(package)?;
                 let dependencies = self
                     .package_set
                     .transitive_deps(package.dependencies.clone());
                 for package in dependencies {
-                    let path = download_package(&package)?;
+                    let path = download_package(package)?;
                     cmd.arg("--package").arg(&package.name).arg(path);
                 }
 
@@ -176,8 +176,7 @@ impl Vessel {
         for package in &self.package_set.topo_sorted() {
             if errors
                 .iter()
-                .find(|(n, _)| package.dependencies.contains(n))
-                .is_none()
+                .any(|(n, _)| package.dependencies.contains(n))
             {
                 if let Err(err) = self.verify_package(moc, moc_args, &package.name) {
                     errors.push((package.name.clone(), err))
