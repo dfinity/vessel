@@ -14,7 +14,7 @@ let
       filter = noNixFile;
       src = subpath ./.;
     };
-    cargoSha256 = "1h0mqc5i8zvigcb77dvqfiq7hkmv1jnkypfi3s5pwqgsg82aklqc";
+    cargoSha256 = "sha256-Kd71TQsZwK4y43wfo2hm0+T8FW1RheIJKKR/wRQkFnY";
     verifyCargoDeps = true;
   };
 in rec {
