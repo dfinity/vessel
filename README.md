@@ -5,6 +5,11 @@ A simple package manager for the Motoko programming language.
 ## Getting started
 
 1. Download a copy of the `vessel` binary [from the release page](https://github.com/dfinity/vessel/releases) or build one yourself
+   1. For Ubuntu in `$HOME/bin` RUN `wget https://github.com/dfinity/vessel/releases/download/v0.6.1/vessel-linux64` 
+
+      For OSX in `usr/local/bin` RUN: `wget https://github.com/dfinity/vessel/releases/download/v0.6.1/vessel-macos` 
+   2. Rename vessel-linux64 to vessel eg: RUN `mv vessel-linux64 vessel`
+   3. Change permissions, `chmod +x vessel`
 2. Run `vessel init` in your project root.
 3. Edit `vessel.dhall` to include your dependencies (potentially also edit
    `package-set.dhall` to include additional package sources)
