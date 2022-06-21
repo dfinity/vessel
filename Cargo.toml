@@ -1,6 +1,6 @@
 [package]
 name = "vessel"
-version = "0.6.4-alpha.1"
+version = "0.6.4"
 authors = ["DFINITY Stiftung (https://github.com/orgs/dfinity/teams/languages)"]
 edition = "2018"
 description = "A package manager for the Motoko programming language."
