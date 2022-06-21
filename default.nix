@@ -8,7 +8,7 @@ let
   vessel = rustPlatform.buildRustPackage rec {
     pname = "vessel";
     version = "1.0.0";
-    buildInputs = [ openssl openssl.dev ];
+    buildInputs = [ openssl_3_0 openssl_3_0.dev ];
     nativeBuildInputs = [ pkg-config ];
     src = lib.sources.cleanSourceWith {
       filter = noNixFile;
