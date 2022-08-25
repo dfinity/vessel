@@ -1,7 +1,6 @@
 use anyhow::{self, Context, Result};
 use flate2::read::GzDecoder;
 use log::{debug, info, warn};
-use path_clean::PathClean;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::cfg;
@@ -200,9 +199,27 @@ impl Vessel {
     }
 }
 
+/// Guards against path strings in package data
+fn is_clean(input: &str) -> bool {
+    // TODO: decide on regular expressions for package names/versions
+    !input.contains('/') && !input.contains('\\') && !input.trim_matches('.').is_empty()
+}
+
+/// Checks package name string
+fn validate_name(name: &str) -> &str {
+    assert!(is_clean(name), "Invalid package name: `{}`", name);
+    name
+}
+
+/// Checks package or compiler version string
+fn validate_version(version: &str) -> &str {
+    assert!(is_clean(version), "Invalid version string: `{}`", version);
+    version
+}
+
 pub fn download_compiler(version: &str) -> Result<PathBuf> {
     let bin = Path::new(".vessel").join(".bin");
-    let dest = bin.join(&version).clean();
+    let dest = bin.join(validate_version(version));
     if dest.exists() {
         return Ok(dest);
     }
@@ -265,14 +282,16 @@ pub fn download_compiler(version: &str) -> Result<PathBuf> {
 /// Downloads a package either as a tar-ball from Github or clones it as a repo
 pub fn download_package(package: &Package, force: bool) -> Result<PathBuf> {
     let vessel_dir = Path::new(".vessel");
-    let package_dir = vessel_dir.join(&package.name).clean();
+    // Always validate the name here
+    let package_dir = vessel_dir.join(validate_name(&package.name));
     if !package_dir.exists() {
         fs::create_dir_all(&package_dir).context(format!(
             "Failed to create the package directory at {}",
             package_dir.display()
         ))?;
     }
-    let repo_dir = package_dir.join(&package.version).clean();
+    // Always validate the version here
+    let repo_dir = package_dir.join(&validate_version(&package.version));
     if force && repo_dir.exists() {
         fs::remove_dir_all(&repo_dir)?;
     }
@@ -522,10 +541,9 @@ pub struct Package {
 impl Package {
     pub fn install_path(&self) -> PathBuf {
         Path::new(".vessel")
-            .join(self.name.clone())
-            .join(self.version.clone())
+            .join(validate_name(&self.name))
+            .join(validate_version(&self.version))
             .join("src")
-            .clean()
     }
 
     /// Returns all Motoko sources found inside this package's installation directory
@@ -642,5 +660,20 @@ mod test {
         );
 
         assert_eq!(vec![&b, &c], ps.transitive_deps(vec!["C".to_string()]))
+    }
+
+    #[test]
+    fn it_validates_package_data() {
+        // Valid names/versions
+        for input in ["a", "a.b", "123", "1.2.3", ".0"] {
+            assert!(std::panic::catch_unwind(|| validate_name(input)).is_ok());
+            assert!(std::panic::catch_unwind(|| validate_version(input)).is_ok());
+        }
+
+        // Invalid names/versions
+        for input in ["", ".", "..", "...", "/", "\\", "a/b", "a\\b"] {
+            assert!(std::panic::catch_unwind(|| validate_name(input)).is_err());
+            assert!(std::panic::catch_unwind(|| validate_version(input)).is_err());
+        }
     }
 }
