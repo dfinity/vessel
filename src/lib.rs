@@ -200,22 +200,27 @@ impl Vessel {
 }
 
 /// Guards against path strings in package data
-fn is_clean(input: &str) -> bool {
+fn is_valid_dirname(input: &str) -> bool {
     input
         .chars()
         .all(|c| c.is_alphanumeric() || "-_.".contains(c))
         && !input.trim_matches('.').is_empty()
+        && !input.starts_with('-')
 }
 
 /// Checks package name string
 fn validate_name(name: &str) -> &str {
-    assert!(is_clean(name), "Invalid package name: `{}`", name);
+    assert!(is_valid_dirname(name), "Invalid package name: `{}`", name);
     name
 }
 
 /// Checks package or compiler version string
 fn validate_version(version: &str) -> &str {
-    assert!(is_clean(version), "Invalid version string: `{}`", version);
+    assert!(
+        is_valid_dirname(version),
+        "Invalid version string: `{}`",
+        version
+    );
     version
 }
 
@@ -665,15 +670,19 @@ mod test {
     }
 
     #[test]
-    fn it_validates_package_data() {
+    fn it_validates_package_strings() {
         // Valid names/versions
-        for input in ["a", "A", "a.b", "123", "1.2.3", ".0", ".a", "-", "_"] {
+        for input in ["a", "A", "a.b", "123", "1.2.3", ".0", ".a", "_"] {
+            println!("{}", input);
             assert!(std::panic::catch_unwind(|| validate_name(input)).is_ok());
             assert!(std::panic::catch_unwind(|| validate_version(input)).is_ok());
         }
 
         // Invalid names/versions
-        for input in ["", ".", "..", "...", "/", "\\", "a/b", "a\\b", "~"] {
+        for input in [
+            "", ".", "..", "...", "/", "\\", "a/b", "a\\b", "~", "-", "-a",
+        ] {
+            println!("{}", input);
             assert!(std::panic::catch_unwind(|| validate_name(input)).is_err());
             assert!(std::panic::catch_unwind(|| validate_version(input)).is_err());
         }
