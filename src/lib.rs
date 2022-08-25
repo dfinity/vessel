@@ -511,7 +511,7 @@ pub type Tag = String;
 
 pub type Name = String;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, serde_dhall::StaticType)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, serde_dhall::StaticType)]
 pub struct Package {
     pub name: Name,
     pub repo: Url,
@@ -551,7 +551,7 @@ impl Package {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct PackageSet(pub HashMap<Name, Package>);
 
-#[derive(Debug, PartialEq, Default, Serialize, Deserialize, serde_dhall::StaticType)]
+#[derive(Debug, PartialEq, Eq, Default, Serialize, Deserialize, serde_dhall::StaticType)]
 pub struct Manifest {
     pub compiler: Option<String>,
     pub dependencies: Vec<Name>,
