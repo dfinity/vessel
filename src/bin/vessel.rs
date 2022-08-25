@@ -82,7 +82,7 @@ fn main() -> Result<()> {
 
     match opts.command {
         Command::Init => vessel::init(),
-        Command::Install {force} => {
+        Command::Install { force } => {
             let vessel = vessel::Vessel::new(&opts.package_set)?;
             let _ = vessel.install_packages(force)?;
             Ok(())
