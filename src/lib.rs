@@ -1,6 +1,7 @@
 use anyhow::{self, Context, Result};
 use flate2::read::GzDecoder;
 use log::{debug, info, warn};
+use path_clean::PathClean;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::cfg;
@@ -97,7 +98,7 @@ impl Vessel {
     }
 
     /// Installs all transitive dependencies and returns a mapping of package name -> installation location
-    pub fn install_packages(&self) -> Result<Vec<(Name, PathBuf)>> {
+    pub fn install_packages(&self, force: bool) -> Result<Vec<(Name, PathBuf)>> {
         let install_plan = self
             .package_set
             .transitive_deps(self.manifest.dependencies.clone());
@@ -107,7 +108,8 @@ impl Vessel {
         let paths = install_plan
             .iter()
             .map(|package| {
-                download_package(package).map(|path| (package.name.clone(), self.nested_path(path)))
+                download_package(package, force)
+                    .map(|path| (package.name.clone(), self.nested_path(path)))
             })
             .collect::<Result<Vec<(String, PathBuf)>>>()?;
 
@@ -139,12 +141,12 @@ impl Vessel {
                 if let Some(args) = moc_args {
                     cmd.args(args.split(' '));
                 }
-                download_package(package)?;
+                download_package(package, false)?;
                 let dependencies = self
                     .package_set
                     .transitive_deps(package.dependencies.clone());
                 for package in dependencies {
-                    let path = download_package(package)?;
+                    let path = download_package(package, false)?;
                     cmd.arg("--package").arg(&package.name).arg(path);
                 }
 
@@ -261,15 +263,19 @@ pub fn download_compiler(version: &str) -> Result<PathBuf> {
 }
 
 /// Downloads a package either as a tar-ball from Github or clones it as a repo
-pub fn download_package(package: &Package) -> Result<PathBuf> {
-    let package_dir = Path::new(".vessel").join(package.name.clone());
+pub fn download_package(package: &Package, force: bool) -> Result<PathBuf> {
+    let vessel_dir = Path::new(".vessel");
+    let package_dir = vessel_dir.join(&package.name).clean();
     if !package_dir.exists() {
         fs::create_dir_all(&package_dir).context(format!(
             "Failed to create the package directory at {}",
             package_dir.display()
         ))?;
     }
-    let repo_dir = package_dir.join(&package.version);
+    let repo_dir = package_dir.join(&package.version).clean();
+    if force && repo_dir.exists() {
+        fs::remove_dir_all(&repo_dir)?;
+    }
     if !repo_dir.exists() {
         let tmp = Path::new(".vessel").join(".tmp");
         if !tmp.exists() {
