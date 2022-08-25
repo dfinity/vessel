@@ -549,7 +549,7 @@ impl Package {
 
 // This isn't normalized, as the package name is duplicated, but it's too handy
 // to have a `Package` carry its name along.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PackageSet(pub HashMap<Name, Package>);
 
 #[derive(Debug, PartialEq, Eq, Default, Serialize, Deserialize, serde_dhall::StaticType)]
