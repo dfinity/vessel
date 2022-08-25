@@ -293,7 +293,7 @@ pub fn download_package(package: &Package, force: bool) -> Result<PathBuf> {
         ))?;
     }
     // Always validate the version here
-    let repo_dir = package_dir.join(&validate_version(&package.version));
+    let repo_dir = package_dir.join(validate_version(&package.version));
     if force && repo_dir.exists() {
         fs::remove_dir_all(&repo_dir)?;
     }
