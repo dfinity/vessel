@@ -202,7 +202,7 @@ impl Vessel {
 
 pub fn download_compiler(version: &str) -> Result<PathBuf> {
     let bin = Path::new(".vessel").join(".bin");
-    let dest = bin.join(&version);
+    let dest = bin.join(&version).clean();
     if dest.exists() {
         return Ok(dest);
     }
@@ -525,6 +525,7 @@ impl Package {
             .join(self.name.clone())
             .join(self.version.clone())
             .join("src")
+            .clean()
     }
 
     /// Returns all Motoko sources found inside this package's installation directory
