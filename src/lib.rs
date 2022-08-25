@@ -201,8 +201,10 @@ impl Vessel {
 
 /// Guards against path strings in package data
 fn is_clean(input: &str) -> bool {
-    // TODO: decide on regular expressions for package names/versions
-    !input.contains('/') && !input.contains('\\') && !input.trim_matches('.').is_empty()
+    input
+        .chars()
+        .all(|c| c.is_alphanumeric() || "-_.".contains(c))
+        && !input.trim_matches('.').is_empty()
 }
 
 /// Checks package name string
@@ -665,13 +667,13 @@ mod test {
     #[test]
     fn it_validates_package_data() {
         // Valid names/versions
-        for input in ["a", "a.b", "123", "1.2.3", ".0"] {
+        for input in ["a", "A", "a.b", "123", "1.2.3", ".0", ".a", "-", "_"] {
             assert!(std::panic::catch_unwind(|| validate_name(input)).is_ok());
             assert!(std::panic::catch_unwind(|| validate_version(input)).is_ok());
         }
 
         // Invalid names/versions
-        for input in ["", ".", "..", "...", "/", "\\", "a/b", "a\\b"] {
+        for input in ["", ".", "..", "...", "/", "\\", "a/b", "a\\b", "~"] {
             assert!(std::panic::catch_unwind(|| validate_name(input)).is_err());
             assert!(std::panic::catch_unwind(|| validate_version(input)).is_err());
         }
