@@ -21,7 +21,10 @@ enum Command {
     /// Sets up the minimal project configuration
     Init,
     /// Installs all dependencies and prints a human readable summary
-    Install,
+    Install {
+        #[structopt(short = "f")]
+        force: bool,
+    },
     /// Outputs the import and hash for the latest vessel-package-set release.
     UpgradeSet {
         /// Use this tag instead of latest
@@ -79,9 +82,9 @@ fn main() -> Result<()> {
 
     match opts.command {
         Command::Init => vessel::init(),
-        Command::Install => {
+        Command::Install { force } => {
             let vessel = vessel::Vessel::new(&opts.package_set)?;
-            let _ = vessel.install_packages()?;
+            let _ = vessel.install_packages(force)?;
             Ok(())
         }
         Command::UpgradeSet { tag } => {
@@ -102,7 +105,7 @@ fn main() -> Result<()> {
         Command::Sources => {
             let vessel = vessel::Vessel::new(&opts.package_set)?;
             let sources = vessel
-                .install_packages()?
+                .install_packages(false)?
                 .into_iter()
                 .map(|(name, path)| format!("--package {} {}", name, path.display()))
                 .collect::<Vec<_>>()
