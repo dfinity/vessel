@@ -1,9 +1,9 @@
-use anyhow::{Context, Result, anyhow, Error};
+use anyhow::{anyhow, Context, Error, Result};
 use flate2::read::GzDecoder;
 use log::{debug, info, warn};
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use std::{cfg};
+use std::cfg;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
@@ -69,7 +69,7 @@ impl Vessel {
         let mo_file = PathBuf::from("vessel.mo");
         self.manifest = if mo_file.exists() {
             motoko::vm::eval_into(&fs::read_to_string(mo_file)?)
-            .map_err(|e| anyhow!("Error while reading Motoko config file: {:?}", e))?
+                .map_err(|e| anyhow!("Error while reading Motoko config file: {:?}", e))?
         } else {
             let dhall_file = PathBuf::from("vessel.dhall");
             serde_dhall::from_file(dhall_file)
@@ -126,10 +126,11 @@ impl Vessel {
     /// Downloads the compiler binaries at the version specified in the manifest
     /// and returns the path to them.
     pub fn install_compiler(&self) -> Result<PathBuf> {
-        let version =
-            self.manifest.compiler.as_ref().ok_or_else(|| {
-                anyhow!("No compiler version was specified in vessel.dhall")
-            })?;
+        let version = self
+            .manifest
+            .compiler
+            .as_ref()
+            .ok_or_else(|| anyhow!("No compiler version was specified in vessel.dhall"))?;
         download_compiler(version).map(|path| self.nested_path(path))
     }
 
@@ -430,10 +431,7 @@ pub fn fetch_latest_package_set() -> Result<(Url, Hash)> {
         .header(reqwest::header::USER_AGENT, "vessel")
         .send()?;
     if !response.status().is_success() {
-        return Err(anyhow!(
-            "Failed to read Github releases: {:#?}",
-            response
-        ));
+        return Err(anyhow!("Failed to read Github releases: {:#?}", response));
     }
     let releases: Vec<GhRelease> = response.json()?;
     let release = &releases[0].tag_name;
