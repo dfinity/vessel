@@ -8,7 +8,11 @@ let
   vessel = rustPlatform.buildRustPackage rec {
     pname = "vessel";
     version = "0.6.5";
-    buildInputs = [ openssl_3_0 openssl_3_0.dev ];
+    buildInputs = [ 
+      openssl_3_0 openssl_3_0.dev 
+      ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+        pkgs.darwin.apple_sdk.frameworks.Security
+      ];
     nativeBuildInputs = [ pkg-config ];
     src = lib.sources.cleanSourceWith {
       filter = noNixFile;
