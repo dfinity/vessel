@@ -1,4 +1,4 @@
-use anyhow::{self, Context, Result};
+use anyhow::{anyhow, Context, Error, Result};
 use flate2::read::GzDecoder;
 use log::{debug, info, warn};
 use semver::Version;
@@ -28,7 +28,7 @@ impl Vessel {
     fn find_dominating_manifest() -> Result<Option<u32>> {
         let cwd = env::current_dir().context("Unable to access the current directory")?;
         for (depth, path) in cwd.ancestors().enumerate() {
-            if path.join("vessel.dhall").exists() {
+            if path.join("vessel.dhall").exists() || path.join("vessel.mo").exists() {
                 if depth != 0 {
                     info!("Changing working directory to {}", path.display());
                     env::set_current_dir(&path).context(format!(
@@ -45,8 +45,8 @@ impl Vessel {
     pub fn new(package_set_file: &Path) -> Result<Vessel> {
         let mut new_vessel = match Vessel::find_dominating_manifest()? {
             None => {
-                return Err(anyhow::anyhow!(
-                    "Could not find a 'vessel.dhall' file in this directory or a parent one."
+                return Err(anyhow!(
+                    "Could not find a 'vessel.dhall' or 'vessel.mo' file in this directory or a parent one."
                 ))
             }
             Some(nested) => Vessel {
@@ -66,11 +66,17 @@ impl Vessel {
     }
 
     fn read_manifest_file(&mut self) -> Result<()> {
-        let manifest_file = PathBuf::from("vessel.dhall");
-        self.manifest = serde_dhall::from_file(manifest_file)
-            .static_type_annotation()
-            .parse()
-            .context("Failed to parse the vessel.dhall file")?;
+        let mo_file = PathBuf::from("vessel.mo");
+        self.manifest = if mo_file.exists() {
+            motoko::vm::eval_into(&fs::read_to_string(mo_file)?)
+                .map_err(|e| anyhow!("Error while reading Motoko config file: {:?}", e))?
+        } else {
+            let dhall_file = PathBuf::from("vessel.dhall");
+            serde_dhall::from_file(dhall_file)
+                .static_type_annotation()
+                .parse()
+                .context("Failed to parse the vessel.dhall file")?
+        };
         Ok(())
     }
 
@@ -120,17 +126,18 @@ impl Vessel {
     /// Downloads the compiler binaries at the version specified in the manifest
     /// and returns the path to them.
     pub fn install_compiler(&self) -> Result<PathBuf> {
-        let version =
-            self.manifest.compiler.as_ref().ok_or_else(|| {
-                anyhow::anyhow!("No compiler version was specified in vessel.dhall")
-            })?;
+        let version = self
+            .manifest
+            .compiler
+            .as_ref()
+            .ok_or_else(|| anyhow!("No compiler version was specified in vessel.dhall"))?;
         download_compiler(version).map(|path| self.nested_path(path))
     }
 
     /// Verifies that every source file inside the given package compiles in the current package set
     pub fn verify_package(&self, moc: &Path, moc_args: &Option<String>, name: &str) -> Result<()> {
         match self.package_set.find(name) {
-            None => Err(anyhow::anyhow!(
+            None => Err(anyhow!(
                 "The package \"{}\" does not exist in the package set",
                 name
             )),
@@ -162,7 +169,7 @@ impl Vessel {
                     }
                     Ok(())
                 } else {
-                    Err(anyhow::anyhow!(
+                    Err(anyhow!(
                         "Failed to verify \"{}\" with:\n{}",
                         package.name,
                         String::from_utf8(output.stderr)?
@@ -173,7 +180,7 @@ impl Vessel {
     }
 
     pub fn verify_all(&self, moc: &Path, moc_args: &Option<String>) -> Result<()> {
-        let mut errors: Vec<(Name, anyhow::Error)> = vec![];
+        let mut errors: Vec<(Name, Error)> = vec![];
         for package in &self.package_set.topo_sorted() {
             if errors.iter().any(|(n, _)| package.dependencies.contains(n)) {
                 if let Err(err) = self.verify_package(moc, moc_args, &package.name) {
@@ -184,7 +191,7 @@ impl Vessel {
         if errors.is_empty() {
             Ok(())
         } else {
-            let err = anyhow::anyhow!(
+            let err = anyhow!(
                 "Failed to verify: {:?}",
                 errors
                     .iter()
@@ -241,7 +248,7 @@ pub fn download_compiler(version: &str) -> Result<PathBuf> {
     } else if cfg!(target_os = "macos") {
         ("x86_64-darwin", "macos")
     } else {
-        return Err(anyhow::anyhow!(
+        return Err(anyhow!(
             "Installing the compiler is only supported on Linux or MacOS for now"
         ));
     };
@@ -263,7 +270,7 @@ pub fn download_compiler(version: &str) -> Result<PathBuf> {
         .send()?;
 
     if !response.status().is_success() {
-        return Err(anyhow::anyhow!(
+        return Err(anyhow!(
             "Failed to download Motoko binaries for version {}, with \"{}\"\n\nDetails: {}",
             version,
             response.status(),
@@ -339,7 +346,7 @@ fn download_tar_ball(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Resu
     let response = reqwest::blocking::get(&target)?;
 
     if !response.status().is_success() {
-        return Err(anyhow::anyhow!(
+        return Err(anyhow!(
             "Failed to download tarball for repo \"{}\" at version \"{}\", with \"{}\"\n\nDetails: {}",
             repo,
             version,
@@ -355,12 +362,12 @@ fn download_tar_ball(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Resu
 
     // We expect an unpacked repo to contain exactly one directory
     let repo_dir = match fs::read_dir(tmp_dir.path())?.next() {
-        None => return Err(anyhow::anyhow!("Unpacked an empty tarball for {}", repo)),
+        None => return Err(anyhow!("Unpacked an empty tarball for {}", repo)),
         Some(dir) => dir?,
     };
 
     if !repo_dir.path().is_dir() {
-        return Err(anyhow::anyhow!("Failed to unpack tarball for \"{}\"", repo));
+        return Err(anyhow!("Failed to unpack tarball for \"{}\"", repo));
     }
     fs::rename(repo_dir.path(), dest)?;
 
@@ -376,7 +383,7 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
         .output()
         .context(format!("Failed to clone the repo at {}", repo))?;
     if !clone_result.status.success() {
-        return Err(anyhow::anyhow!(
+        return Err(anyhow!(
             "Failed to clone the repo at: {}\nwith:\n{}",
             repo,
             std::str::from_utf8(&clone_result.stderr).unwrap()
@@ -395,7 +402,7 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
             repo_dir.display()
         ))?;
     if !checkout_result.status.success() {
-        return Err(anyhow::anyhow!(
+        return Err(anyhow!(
             "Failed to checkout version {} for the repo at: {}\nwith:\n{}",
             version,
             repo,
@@ -424,10 +431,7 @@ pub fn fetch_latest_package_set() -> Result<(Url, Hash)> {
         .header(reqwest::header::USER_AGENT, "vessel")
         .send()?;
     if !response.status().is_success() {
-        return Err(anyhow::anyhow!(
-            "Failed to read Github releases: {:#?}",
-            response
-        ));
+        return Err(anyhow!("Failed to read Github releases: {:#?}", response));
     }
     let releases: Vec<GhRelease> = response.json()?;
     let release = &releases[0].tag_name;
@@ -481,12 +485,12 @@ pub fn init() -> Result<()> {
         }
     };
     if package_set_path.exists() {
-        return Err(anyhow::anyhow!(
+        return Err(anyhow!(
             "Failed to initialize, there is an existing package-set.dhall file here"
         ));
     }
     if manifest_path.exists() {
-        return Err(anyhow::anyhow!(
+        return Err(anyhow!(
             "Failed to initialize, there is an existing vessel.dhall file here"
         ));
     }
