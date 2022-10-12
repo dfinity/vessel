@@ -76,7 +76,6 @@ impl Vessel {
     fn read_package_set(&mut self, package_set_file: &Path) -> Result<()> {
         self.package_set = PackageSet::new(
             serde_dhall::from_file(package_set_file)
-                .static_type_annotation()
                 .parse()
                 .context("Failed to parse the package set file")?,
         );
@@ -543,7 +542,7 @@ pub type Tag = String;
 
 pub type Name = String;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, serde_dhall::StaticType)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Package {
     pub name: Name,
     pub repo: Url,
