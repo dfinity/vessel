@@ -68,7 +68,6 @@ impl Vessel {
     fn read_manifest_file(&mut self) -> Result<()> {
         let manifest_file = PathBuf::from("vessel.dhall");
         self.manifest = serde_dhall::from_file(manifest_file)
-            .static_type_annotation()
             .parse()
             .context("Failed to parse the vessel.dhall file")?;
         Ok(())
@@ -77,7 +76,6 @@ impl Vessel {
     fn read_package_set(&mut self, package_set_file: &Path) -> Result<()> {
         self.package_set = PackageSet::new(
             serde_dhall::from_file(package_set_file)
-                .static_type_annotation()
                 .parse()
                 .context("Failed to parse the package set file")?,
         );
@@ -98,11 +96,18 @@ impl Vessel {
 
     /// Installs all transitive dependencies and returns a mapping of package name -> installation location
     pub fn install_packages(&self, force: bool) -> Result<Vec<(Name, PathBuf)>> {
-        let install_plan = self
-            .package_set
-            .transitive_deps(self.manifest.dependencies.clone());
-
-        info!("Installing {} packages", install_plan.len());
+        let install_plan = self.package_set.transitive_deps(
+            [
+                self.manifest.dependencies.clone(),
+                self.manifest.dev_dependencies.clone(),
+            ]
+            .concat(),
+        );
+        info!(
+            "Installing {} package{}",
+            install_plan.len(),
+            if install_plan.len() == 1 { "" } else { "s" },
+        );
 
         let paths = install_plan
             .iter()
@@ -537,7 +542,7 @@ pub type Tag = String;
 
 pub type Name = String;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, serde_dhall::StaticType)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Package {
     pub name: Name,
     pub repo: Url,
@@ -577,10 +582,26 @@ impl Package {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PackageSet(pub HashMap<Name, Package>);
 
-#[derive(Debug, PartialEq, Eq, Default, Serialize, Deserialize, serde_dhall::StaticType)]
-pub struct Manifest {
+#[derive(Debug, PartialEq, Eq, Default, Serialize, Deserialize)] // , Serialize, Deserialize, serde_dhall::StaticType
+#[serde(rename_all = "camelCase")]
+pub struct LegacyManifest {
+    #[serde(default)]
     pub compiler: Option<String>,
+    #[serde(default)]
     pub dependencies: Vec<Name>,
+    #[serde(default, rename = "devDependencies")]
+    pub dev_dependencies: Vec<Name>,
+}
+
+#[derive(Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Manifest {
+    #[serde(default)]
+    pub compiler: Option<String>,
+    #[serde(default)]
+    pub dependencies: Vec<Name>,
+    #[serde(default, rename = "devDependencies")]
+    pub dev_dependencies: Vec<Name>,
 }
 
 impl PackageSet {
