@@ -31,7 +31,7 @@ impl Vessel {
             if path.join("vessel.dhall").exists() {
                 if depth != 0 {
                     info!("Changing working directory to {}", path.display());
-                    env::set_current_dir(&path).context(format!(
+                    env::set_current_dir(path).context(format!(
                         "Failed to change current directory to {}",
                         path.display()
                     ))?;
@@ -371,7 +371,7 @@ fn download_tar_ball(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Resu
 fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<()> {
     let tmp_dir: TempDir = tempfile::tempdir_in(tmp)?;
     let clone_result = Command::new("git")
-        .args(&["clone", repo, "repo"])
+        .args(["clone", repo, "repo"])
         .current_dir(tmp_dir.path())
         .output()
         .context(format!("Failed to clone the repo at {}", repo))?;
@@ -385,7 +385,7 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
 
     let repo_dir = tmp_dir.path().join("repo");
     let checkout_result = Command::new("git")
-        .args(&["-c", "advice.detachedHead=false", "checkout", version])
+        .args(["-c", "advice.detachedHead=false", "checkout", version])
         .current_dir(&repo_dir)
         .output()
         .context(format!(
