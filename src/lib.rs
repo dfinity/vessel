@@ -258,7 +258,7 @@ pub fn download_compiler(version: &str) -> Result<PathBuf> {
 
     let client = reqwest::blocking::Client::new();
     let response = client
-        .get(&target)
+        .get(target)
         .header(reqwest::header::USER_AGENT, "vessel")
         .send()?;
 
@@ -336,7 +336,7 @@ fn download_tar_ball(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Resu
         repo.trim_end_matches(".git"),
         version
     );
-    let response = reqwest::blocking::get(&target)?;
+    let response = reqwest::blocking::get(target)?;
 
     if !response.status().is_success() {
         return Err(anyhow::anyhow!(
