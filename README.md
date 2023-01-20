@@ -1,6 +1,11 @@
 # vessel
 
-A simple package manager for the Motoko programming language.
+A package manager for the Motoko programming language.
+
+## Upcoming changes
+
+#### Vessel is currently being redesigned to improve the UX and scalability of the Motoko package ecosystem.
+If you want to see a specific feature in the next version of Vessel, we strongly encourage you to [submit a request](https://github.com/dfinity/vessel/issues/new) or [jump into the conversation](https://github.com/dfinity/vessel/issues). Thank you! 
 
 ## Getting started
 
@@ -75,8 +80,7 @@ The `"version"` field in the package set format refers to any git ref so you can
 put a branch name, a commit hash or a tag in there.
 
 **CAREFUL:** `vessel` has no way of invalidating "moving" references like a
-branch name. If you push a new commit to the branch you'll need to manually
-reset your caches and re-install.
+branch name. If you push a new commit to the branch you'll need to run `vessel install --force` to bypass your local cache.
 
 ### How do I add a local package to my package set?
 
