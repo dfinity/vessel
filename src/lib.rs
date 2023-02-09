@@ -152,7 +152,7 @@ impl Vessel {
                 package.sources().for_each(|entry_point| {
                     cmd.arg(entry_point);
                 });
-                let output = cmd.output().context(format!("Failed to run {:?}", cmd))?;
+                let output = cmd.output().context(format!("Failed to run {cmd:?}"))?;
                 if output.status.success() {
                     let warnings = String::from_utf8(output.stderr)?;
                     if !warnings.is_empty() {
@@ -374,7 +374,7 @@ fn clone_package(tmp: &Path, dest: &Path, repo: &str, version: &str) -> Result<(
         .args(["clone", repo, "repo"])
         .current_dir(tmp_dir.path())
         .output()
-        .context(format!("Failed to clone the repo at {}", repo))?;
+        .context(format!("Failed to clone the repo at {repo}"))?;
     if !clone_result.status.success() {
         return Err(anyhow::anyhow!(
             "Failed to clone the repo at: {}\nwith:\n{}",
@@ -443,8 +443,7 @@ pub fn fetch_package_set(tag: &str) -> Result<(Url, Hash)> {
 
 fn fetch_package_set_impl(client: &reqwest::blocking::Client, tag: &str) -> Result<(Url, Hash)> {
     let package_set_url = format!(
-        "https://github.com/dfinity/vessel-package-set/releases/download/{}/package-set.dhall",
-        tag
+        "https://github.com/dfinity/vessel-package-set/releases/download/{tag}/package-set.dhall"
     );
     let package_set = client
         .get(&package_set_url)
@@ -460,10 +459,10 @@ fn fetch_package_set_impl(client: &reqwest::blocking::Client, tag: &str) -> Resu
 /// Computes the sha256 hash for a given Dhall expression
 fn hash_dhall_expression(expr: &str) -> Result<String> {
     let dhall_expr = dhall::syntax::text::parser::parse_expr(expr)
-        .context(format!("Failed to parse a dhall expression: {}", expr))?;
+        .context(format!("Failed to parse a dhall expression: {expr}"))?;
     let hash = dhall_expr
         .sha256_hash()
-        .context(format!("Failed to hash the expression: {:?}", dhall_expr))?;
+        .context(format!("Failed to hash the expression: {dhall_expr:?}"))?;
     let formatted_hash = format!("{}", dhall::syntax::Hash::SHA256(hash));
     Ok(formatted_hash)
 }
@@ -500,7 +499,7 @@ pub fn init() -> Result<()> {
 "#,
     )?;
     let mut manifest = fs::File::create("package-set.dhall")?;
-    write!(&mut manifest, "let upstream = {} {}", package_set_url, hash)?;
+    write!(&mut manifest, "let upstream = {package_set_url} {hash}")?;
     manifest.write_all(
         br#"
 let Package =
@@ -674,7 +673,7 @@ mod test {
     fn it_validates_package_strings() {
         // Valid names/versions
         for input in ["a", "A", "a.b", "123", "1.2.3", ".0", ".a", "_"] {
-            println!("{}", input);
+            println!("{input}");
             assert!(std::panic::catch_unwind(|| validate_name(input)).is_ok());
             assert!(std::panic::catch_unwind(|| validate_version(input)).is_ok());
         }
@@ -683,7 +682,7 @@ mod test {
         for input in [
             "", ".", "..", "...", "/", "\\", "a/b", "a\\b", "~", "-", "-a",
         ] {
-            println!("{}", input);
+            println!("{input}");
             assert!(std::panic::catch_unwind(|| validate_name(input)).is_err());
             assert!(std::panic::catch_unwind(|| validate_version(input)).is_err());
         }

@@ -92,7 +92,7 @@ fn main() -> Result<()> {
                 None => vessel::fetch_latest_package_set()?,
                 Some(tag) => vessel::fetch_package_set(&tag)?,
             };
-            println!("let upstream =\n      {} {}", url, hash);
+            println!("let upstream =\n      {url} {hash}");
             Ok(())
         }
         Command::Bin => {
@@ -110,7 +110,7 @@ fn main() -> Result<()> {
                 .map(|(name, path)| format!("--package {} {}", name, path.display()))
                 .collect::<Vec<_>>()
                 .join(" ");
-            print!("{}", sources);
+            print!("{sources}");
             std::io::stdout().flush()?;
             Ok(())
         }
