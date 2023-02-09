@@ -418,8 +418,9 @@ type Hash = String;
 /// Dhall hash. This way it can be used to initialize the package-set file.
 pub fn fetch_latest_package_set() -> Result<(Url, Hash)> {
     let client = reqwest::blocking::Client::new();
+    let url = "https://api.github.com/repos/dfinity/vessel-package-set/releases";
     let response = client
-        .get("https://api.github.com/repos/dfinity/vessel-package-set/releases")
+        .get(url)
         .header(reqwest::header::ACCEPT, "application/vnd.github.v3+json")
         .header(reqwest::header::USER_AGENT, "vessel")
         .send()?;
@@ -430,7 +431,7 @@ pub fn fetch_latest_package_set() -> Result<(Url, Hash)> {
         ));
     }
     let releases: Vec<GhRelease> = response.json()?;
-    let release = &releases[0].tag_name;
+    let release = &releases.first().ok_or_else(|| anyhow::anyhow!("Unable to find any vessel-package-set releases from {}.\nPlease try again in a few minutes or open an issue at https://github.com/dfinity/vessel/issues.", url))?.tag_name;
     fetch_package_set_impl(&client, release)
 }
 
