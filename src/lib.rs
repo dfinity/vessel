@@ -431,7 +431,7 @@ pub fn fetch_latest_package_set() -> Result<(Url, Hash)> {
         ));
     }
     let releases: Vec<GhRelease> = response.json()?;
-    let release = &releases.get(0).ok_or_else(|| anyhow::anyhow!("Unable to find any vessel-package-set releases from {}.\nPlease try again in a few minutes or open an issue at https://github.com/dfinity/vessel/issues.", url))?.tag_name;
+    let release = &releases.first().ok_or_else(|| anyhow::anyhow!("Unable to find any vessel-package-set releases from {}.\nPlease try again in a few minutes or open an issue at https://github.com/dfinity/vessel/issues.", url))?.tag_name;
     fetch_package_set_impl(&client, release)
 }
 
