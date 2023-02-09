@@ -1,4 +1,4 @@
-# vessel
+# Vessel
 
 A package manager for the Motoko programming language.
 
@@ -36,19 +36,19 @@ If you want to see a specific feature in the next version of Vessel, we strongly
 
 ## How it works
 
-`vessel` is inspired by the [spago](https://github.com/purescript/spago) package
+Vessel is inspired by the [spago](https://github.com/purescript/spago) package
 manager for PureScript. Any git repository with a `src/` directory is a valid
-package to `vessel`, which is a flexible and lightweight approach to package
+package to Vessel, which is a flexible and lightweight approach to package
 management, that is easily extended with more guarantees and features as our
-community grows. The two concepts you need to understand to work with `vessel`
+community grows. The two concepts you need to understand to work with Vessel
 are _package sets_ and the _manifest_ file.
 
 ### Package sets
 
-`vessel` uses the idea of a _package set_ to manage where it pulls dependencies
+Vessel uses the idea of a _package set_ to manage where it pulls dependencies
 from. A package set is a collection of packages at certain versions that are
 known to compile together. The package set also specifies the dependencies
-between these packages, so that `vessel` can find all the transitively needed
+between these packages, so that Vessel can find all the transitively needed
 packages to build your project. There will be a community maintained package set of
 publicly available, open source packages. You can then base your projects
 package set on the public one and extend it with your private and local
@@ -58,13 +58,13 @@ file by default.
 ### Manifest file
 
 Your `vessel.dhall` file contains the list of packages you need for your project
-to build. `vessel` will look at this file, and figure out all the transitive
+to build. Vessel will look at this file, and figure out all the transitive
 packages you need using the package set file. Optionally it also contains a
-compiler version that `vessel` uses to download the compiler binaries for you.
+compiler version that Vessel uses to download the compiler binaries for you.
 Any change to this file requires a reload of the language service so your
 packages can be picked up by your editor for now.
 
-After `vessel` has installed all required packages through cloning or
+After Vessel has installed all required packages through cloning or
 downloading tarballs, it puts them in a project local location (the `.vessel`
 directory).
 
@@ -79,7 +79,7 @@ Remove the `.vessel` directory in your project
 The `"version"` field in the package set format refers to any git ref so you can
 put a branch name, a commit hash or a tag in there.
 
-**CAREFUL:** `vessel` has no way of invalidating "moving" references like a
+**CAREFUL:** Vessel has no way of invalidating "moving" references like a
 branch name. If you push a new commit to the branch you'll need to run `vessel install --force` to bypass your local cache.
 
 ### How do I add a local package to my package set?
@@ -99,13 +99,13 @@ let additions = [
 
 Now you can depend on this package by adding `mypackage` to your `vessel.dhall` file.
 
-### How do I integrate `vessel` into my custom build?
+### How do I integrate Vessel into my custom build?
 
 Running `vessel sources` will return flags in a format you can pass directly to
 the various compiler tools. Running `vessel bin` returns the path containing the
 compiler binaries. Use like so: `$(vessel bin)/mo-doc`.
 
 ## License
-`vessel` is distributed under the terms of the Apache License (Version 2.0).
+Vessel is distributed under the terms of the Apache License (Version 2.0).
 
 See LICENSE for details.
