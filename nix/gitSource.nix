@@ -56,7 +56,7 @@ in
 
 # unfortunately this is not completely self-contained,
 # we needs pkgs this to get git and lib.cleanSourceWith
-let nixpkgs = import ./. {}; in
+{ system ? builtins.currentSystem, nixpkgs ? import ./. { inherit system; } }:
 
 if !isHydra && builtins.pathExists ../.git
 then

@@ -1,7 +1,7 @@
 { system ? builtins.currentSystem, nixpkgs ? import ./nix { inherit system; } }:
 with nixpkgs;
 let
-  subpath = import ./nix/gitSource.nix;
+  subpath = import ./nix/gitSource.nix { inherit system nixpkgs; } ;
   noNixFile = name: type:
     let baseName = builtins.baseNameOf (builtins.toString name);
     in !(lib.hasSuffix ".nix" name);
