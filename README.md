@@ -1,11 +1,6 @@
 # Vessel
 
-A package manager for the Motoko programming language.
-
-## Upcoming changes
-
-#### Vessel is currently being redesigned to improve the UX and scalability of the Motoko package ecosystem.
-If you want to see a specific feature in the next version of Vessel, we strongly encourage you to [submit a request](https://github.com/dfinity/vessel/issues/new) or [jump into the conversation](https://github.com/dfinity/vessel/issues). Thank you! 
+The original package manager for the Motoko programming language.
 
 ## Getting started
 
