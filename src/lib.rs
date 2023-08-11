@@ -237,9 +237,9 @@ pub fn download_compiler(version: &str) -> Result<PathBuf> {
     }
 
     let os = if cfg!(target_os = "linux") {
-        ("x86_64-linux", "linux64")
+        ("x86_64-linux", "Linux-x86_64")
     } else if cfg!(target_os = "macos") {
-        ("x86_64-darwin", "macos")
+        ("x86_64-darwin", "Darwin-x86_64")
     } else {
         return Err(anyhow::anyhow!(
             "Installing the compiler is only supported on Linux or MacOS for now"
