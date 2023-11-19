@@ -26,9 +26,7 @@ jobs:
     - name: Install stable toolchain
       uses: dtolnay/rust-toolchain@stable
       with:
-        profile: minimal
         toolchain: stable
-        override: true
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --release --locked
