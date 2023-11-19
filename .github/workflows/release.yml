@@ -24,7 +24,7 @@ jobs:
 
     steps:
     - name: Install stable toolchain
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
         profile: minimal
         toolchain: stable
