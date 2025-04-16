@@ -624,9 +624,9 @@ impl PackageSet {
     pub fn topo_sorted(&self) -> Vec<&Package> {
         let mut ts = TopologicalSort::<&str>::new();
         for (name, package) in &self.0 {
-            ts.insert(name.as_ref());
+            ts.insert(name.as_str());
             for dep in &package.dependencies {
-                ts.add_dependency(dep.as_ref(), name.as_ref())
+                ts.add_dependency(dep.as_str(), name.as_str())
             }
         }
         ts.map(|name| self.find_unsafe(name)).collect()

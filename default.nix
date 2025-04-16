@@ -8,8 +8,8 @@ let
   vessel = rustPlatform.buildRustPackage rec {
     pname = "vessel";
     version = "0.7.0";
-    buildInputs = [ 
-      openssl_3_0 openssl_3_0.dev 
+    buildInputs = [
+      openssl_3_0 openssl_3_0.dev
       ] ++ pkgs.lib.optional pkgs.stdenv.isDarwin
         pkgs.darwin.apple_sdk.frameworks.Security;
     nativeBuildInputs = [ pkg-config ];
@@ -17,7 +17,7 @@ let
       filter = noNixFile;
       src = subpath ./.;
     };
-    cargoSha256 = "sha256-7lokhaImoo7Z89YSiS+v1OosI+hlLkpwvv0AkYn1FvE=";
+    cargoHash = "sha256-qxEbXAmwNgcgxk62mH9NZWBiIMM/qr8Hu8/tAKvn/cI=";
     verifyCargoDeps = true;
   };
 in rec {
