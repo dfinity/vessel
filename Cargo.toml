@@ -8,17 +8,17 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-log = "0.4.17"
-fern = { version = "0.6.1", features = ["colored"] }
-tar = "0.4.38"
-flate2 = "1.0.24"
-reqwest = { version = "0.11.12", features = ["blocking", "json"] }
-tempfile = "3.3.0"
-serde = { version = "1.0.145", features = ["derive"] }
-structopt = "0.3.26"
-anyhow = "1.0.65"
-walkdir = "2.3.2"
-topological-sort = "0.2.2"
-serde_dhall = "0.12.0"
+anyhow = "1"
 dhall = "0.12.0"
-semver = "1.0.14"
+fern = { version = "0.7", features = ["colored"] }
+flate2 = "1.1"
+log = "0.4"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_dhall = "0.12.0"
+structopt = "0.3.26"
+tar = "0.4"
+tempfile = "3.19"
+topological-sort = "0.2.2"
+walkdir = "2.5"
