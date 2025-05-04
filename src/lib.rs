@@ -175,7 +175,7 @@ impl Vessel {
     pub fn verify_all(&self, moc: &Path, moc_args: &Option<String>) -> Result<()> {
         let mut errors: Vec<(Name, anyhow::Error)> = vec![];
         for package in &self.package_set.topo_sorted() {
-            if errors.iter().any(|(n, _)| package.dependencies.contains(n)) {
+            if !errors.iter().any(|(n, _)| package.dependencies.contains(n)) {
                 if let Err(err) = self.verify_package(moc, moc_args, &package.name) {
                     errors.push((package.name.clone(), err))
                 }
