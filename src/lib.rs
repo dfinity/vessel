@@ -186,10 +186,104 @@ impl Vessel {
         } else {
             let err = anyhow::anyhow!(
                 "Failed to verify: {:?}",
-                errors
-                    .iter()
-                    .map(|(n, _)| n.clone())
-                    .collect::<Vec<String>>()
+                errors.iter().map(|(ref n, _)| n).collect::<Vec<_>>()
+            );
+            for err in errors.iter().rev() {
+                eprintln!("{}", err.1);
+            }
+            Err(err)
+        }
+    }
+
+    /// Compiles every source file inside the given package in the current package set
+    pub fn compile_package(&self, moc: &Path, moc_args: &Option<String>, name: &str) -> Result<()> {
+        match self.package_set.find(name) {
+            None => Err(anyhow::anyhow!(
+                "The package \"{}\" does not exist in the package set",
+                name
+            )),
+            Some(package) => {
+                // Create temporary directory for WASM output files
+                let tmp = Path::new(".vessel").join(".tmp");
+                if !tmp.exists() {
+                    fs::create_dir_all(&tmp)?
+                }
+                let temp_dir: TempDir = tempfile::tempdir_in(tmp)?;
+
+                download_package(package, false)?;
+                let dependencies = self
+                    .package_set
+                    .transitive_deps(package.dependencies.clone());
+
+                // Compile each entry point separately
+                for (idx, entry_point) in package.sources().enumerate() {
+                    let mut single_cmd = Command::new(moc);
+                    if let Some(args) = moc_args {
+                        single_cmd.args(args.split(' '));
+                    }
+
+                    let entry_wasm_output = temp_dir.path().join(format!("output_{}.wasm", idx));
+                    single_cmd.args(["-o", entry_wasm_output.to_str().unwrap()]);
+
+                    // Add package dependencies
+                    for dep_package in &dependencies {
+                        let path = download_package(dep_package, false)?;
+                        single_cmd.arg("--package").arg(&dep_package.name).arg(path);
+                    }
+
+                    single_cmd.arg(&entry_point);
+
+                    info!("Running command: {single_cmd:?}");
+                    let output = single_cmd
+                        .output()
+                        .context(format!("Failed to run {single_cmd:?}"))?;
+
+                    if !output.status.success() {
+                        return Err(anyhow::anyhow!(
+                            "Failed to verify \"{}\" with:\n{}",
+                            package.name,
+                            String::from_utf8(output.stderr)?
+                        ));
+                    }
+
+                    // Validate generated WASM file
+                    if entry_wasm_output.exists() {
+                        let validate_cmd = Command::new("wasm-validate")
+                            .arg(&entry_wasm_output)
+                            .output()
+                            .context("Failed to run wasm-validate - make sure it's installed")?;
+
+                        if !validate_cmd.status.success() {
+                            return Err(anyhow::anyhow!(
+                                "WASM validation failed for \"{}\" with:\n{}",
+                                package.name,
+                                String::from_utf8(validate_cmd.stderr)?
+                            ));
+                        }
+                    }
+                }
+
+                info!("Verified \"{}\"", package.name);
+                Ok(())
+            }
+        }
+    }
+
+    pub fn compile_all(&self, moc: &Path, moc_args: &Option<String>) -> Result<()> {
+        let mut errors: Vec<(Name, anyhow::Error)> = vec![];
+        for package in &self.package_set.topo_sorted() {
+            if !errors.iter().any(|(n, _)| package.dependencies.contains(n)) {
+                if let Err(err) = self.compile_package(moc, moc_args, &package.name) {
+                    errors.push((package.name.clone(), err))
+                }
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            let err = anyhow::anyhow!(
+                "Failed to compile: {:?}",
+                errors.iter().map(|(ref n, _)| n).collect::<Vec<_>>()
             );
             for err in errors.iter().rev() {
                 eprintln!("{}", err.1);

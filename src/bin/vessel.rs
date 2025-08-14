@@ -53,6 +53,10 @@ enum Command {
         /// When specified only verify the given package name
         #[structopt()]
         package: Option<String>,
+
+        /// When specified fully compile the given package to get the wasm and validates it using wasm-validate
+        #[structopt(long)]
+        compile: bool,
     },
 }
 
@@ -119,6 +123,7 @@ fn main() -> Result<()> {
             moc_args,
             version,
             package,
+            compile,
         } => {
             let vessel = vessel::Vessel::new_without_manifest(&opts.package_set)?;
             let moc = match (moc, version) {
@@ -134,9 +139,16 @@ fn main() -> Result<()> {
                     ))
                 }
             };
-            match package {
-                None => vessel.verify_all(&moc, &moc_args),
-                Some(package) => vessel.verify_package(&moc, &moc_args, &package),
+            if compile {
+                match package {
+                    None => vessel.compile_all(&moc, &moc_args),
+                    Some(package) => vessel.compile_package(&moc, &moc_args, &package),
+                }
+            } else {
+                match package {
+                    None => vessel.verify_all(&moc, &moc_args),
+                    Some(package) => vessel.verify_package(&moc, &moc_args, &package),
+                }
             }
         }
     }
