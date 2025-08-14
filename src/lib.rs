@@ -186,10 +186,7 @@ impl Vessel {
         } else {
             let err = anyhow::anyhow!(
                 "Failed to verify: {:?}",
-                errors
-                    .iter()
-                    .map(|(n, _)| n.clone())
-                    .collect::<Vec<String>>()
+                errors.iter().map(|(ref n, _)| n).collect::<Vec<_>>()
             );
             for err in errors.iter().rev() {
                 eprintln!("{}", err.1);
@@ -236,7 +233,7 @@ impl Vessel {
 
                     single_cmd.arg(&entry_point);
 
-                    info!("Running command: {:?}", single_cmd);
+                    info!("Running command: {single_cmd:?}");
                     let output = single_cmd
                         .output()
                         .context(format!("Failed to run {single_cmd:?}"))?;
@@ -286,10 +283,7 @@ impl Vessel {
         } else {
             let err = anyhow::anyhow!(
                 "Failed to compile: {:?}",
-                errors
-                    .iter()
-                    .map(|(n, _)| n.clone())
-                    .collect::<Vec<String>>()
+                errors.iter().map(|(ref n, _)| n).collect::<Vec<_>>()
             );
             for err in errors.iter().rev() {
                 eprintln!("{}", err.1);
