@@ -104,6 +104,8 @@ compiler binaries. Use like so: `$(vessel bin)/mo-doc`.
 
 `vessel verify` will verify that the given package set compiles successfully.
 
+`vessel verify --version 0.15.1` will compile the package set with version `0.15.1` of the Motoko compiler
+
 `vessel verify --compile` will compile the given package set and validate the wasm output using wasm-validate.
 
 `vessel verify --package <package_name>` will restrict the verification to the given package.
