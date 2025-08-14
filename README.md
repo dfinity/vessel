@@ -113,8 +113,8 @@ compiler binaries. Use like so: `$(vessel bin)/mo-doc`.
 `vessel verify --moc <path_to_moc>` will use the given `moc` binary to verify the package.
 Skipping the `--moc` flag will use the `moc` binary in the `PATH`.
 
-`vessel verify --moc-args="--legacy-persistence"` will pass the given arguments to the `moc` binary.
-In this example, the `--legacy-persistence` flag is passed to verify packages that were not migrated to the new persistence standard.
+`vessel verify --moc-args="--legacy-persistence --legacy-actors"` will pass the given arguments to the `moc` binary.
+In this example, the `--legacy-persistence` and `--legacy-actors` flags are passed to verify packages that were not migrated to the new persistence standard.
 
 ## License
 Vessel is distributed under the terms of the Apache License (Version 2.0).
