@@ -100,6 +100,20 @@ Running `vessel sources` will return flags in a format you can pass directly to
 the various compiler tools. Running `vessel bin` returns the path containing the
 compiler binaries. Use like so: `$(vessel bin)/mo-doc`.
 
+### How to use `vessel verify` to verify a package
+
+`vessel verify` will verify that the given package set compiles successfully.
+
+`vessel verify --compile` will compile the given package set and validate the wasm output using wasm-validate.
+
+`vessel verify --package <package_name>` will restrict the verification to the given package.
+
+`vessel verify --moc <path_to_moc>` will use the given `moc` binary to verify the package.
+Skipping the `--moc` flag will use the `moc` binary in the `PATH`.
+
+`vessel verify --moc-args="--legacy-persistence"` will pass the given arguments to the `moc` binary.
+In this example, the `--legacy-persistence` flag is passed to verify packages that were not migrated to the new persistence standard.
+
 ## License
 Vessel is distributed under the terms of the Apache License (Version 2.0).
 
