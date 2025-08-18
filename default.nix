@@ -7,7 +7,7 @@ let
     in !(lib.hasSuffix ".nix" name);
   vessel = rustPlatform.buildRustPackage rec {
     pname = "vessel";
-    version = "0.7.1";
+    version = "0.8.0";
     buildInputs = [
       openssl_3_0 openssl_3_0.dev
       ] ++ pkgs.lib.optional pkgs.stdenv.isDarwin
@@ -17,7 +17,7 @@ let
       filter = noNixFile;
       src = subpath ./.;
     };
-    cargoHash = "sha256-B3ZkyjF6e1lvKGj6t5bHIlvoJG08p3WlZ4OAJWHDSWo=";
+    cargoHash = "sha256-EUSoMVXCZD7jD4s9EA9aNeknOVKvuKlI1KbCg7Ev30o=";
     verifyCargoDeps = true;
   };
 in rec {
