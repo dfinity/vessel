@@ -7,7 +7,7 @@ let
     in !(lib.hasSuffix ".nix" name);
   vessel = rustPlatform.buildRustPackage rec {
     pname = "vessel";
-    version = "0.7.1";
+    version = "0.8.0";
     buildInputs = [
       openssl_3_0 openssl_3_0.dev
       ] ++ pkgs.lib.optional pkgs.stdenv.isDarwin
